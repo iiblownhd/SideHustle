@@ -77,15 +77,7 @@
 
     const sampleDB = {
       clientes: {},
-      produtos: {
-        "1X":   { stock: 3, preco: 10,  tipo: "FIXO" },
-        "2X":   { stock: 3, preco: 20,  tipo: "FIXO" },
-        "4X":   { stock: 3, preco: 40,  tipo: "FIXO" },
-        "MEIA": { stock: 0, preco: undefined, tipo: "VOLATIL" },
-        "PEÇA": { stock: 0, preco: undefined, tipo: "VOLATIL" },
-        "1/4":  { stock: 0, preco: undefined, tipo: "VOLATIL" },
-        "1/8":  { stock: 0, preco: undefined, tipo: "VOLATIL" },
-      },
+      produtos: {},
       movimentos: [],
     };
 
@@ -960,6 +952,11 @@
 
               {/* STOCK */}
               {screen==="STOCK" && <>
+                {Object.keys(db.produtos).length === 0 && (
+                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>
+                    SEM PRODUTOS — ADICIONA O PRIMEIRO
+                  </div>
+                )}
                 <div style={S.stockGrid}>
                   {Object.entries(db.produtos).map(([n, p]) => {
                     const disp = prodDisplayExtra[n] || PROD_DISPLAY[n] || { emoji:"📦", label:n };
