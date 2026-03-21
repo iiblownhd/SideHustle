@@ -73,7 +73,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const KEY = "sidehustle_v43";
+    const KEY = "sidehustle_v44";
 
     const sampleDB = {
       clientes: {},
@@ -146,19 +146,19 @@
       headerBrand: { fontFamily:GTA, fontSize:11, letterSpacing:5, color:"#f5c800", opacity:0.6, lineHeight:1 },
       headerScreen: { fontFamily:GTA, fontSize:22, letterSpacing:2, color:"#fff", lineHeight:1 },
       headerRight: { display:"flex", alignItems:"center", gap:12 },
-      headerMeta: { fontFamily:GTA, fontSize:13, color:"#888", letterSpacing:1, textAlign:"right" },
-      muteBtn: { background:"transparent", border:"1px solid #222", color:"#555", fontSize:14, width:32, height:32, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:4, flexShrink:0 },
+      headerMeta: { fontFamily:GTA, fontSize:13, color:"#aaa", letterSpacing:1, textAlign:"right" },
+      muteBtn: { background:"transparent", border:"1px solid #222", color:"#aaa", fontSize:14, width:32, height:32, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:4, flexShrink:0 },
       divider: { height:1, background:"linear-gradient(90deg,rgba(245,200,0,0.15),transparent)", marginBottom:2 },
       menuBtn: { display:"flex", alignItems:"center", justifyContent:"center", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer", gap:10 },
       dangerBtn: { display:"flex", alignItems:"center", justifyContent:"space-between", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"14px 18px", background:"#080000", border:"1px solid #330000", borderLeft:"3px solid #ff3300", color:"#ff3300", fontFamily:GTA, fontSize:18, letterSpacing:3, cursor:"pointer" },
-      backBtn: { display:"block", width:"calc(100% - 32px)", margin:"16px 16px 0", padding:"12px 18px", background:"transparent", border:"1px solid #1e1e1e", color:"#444", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"left" },
+      backBtn: { display:"block", width:"calc(100% - 32px)", margin:"16px 16px 0", padding:"12px 18px", background:"transparent", border:"1px solid #1e1e1e", color:"#aaa", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"left" },
       confirmBtn: { display:"block", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0d0d00", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer", textAlign:"center" },
       clienteRow: { display:"flex", alignItems:"center", gap:8, padding:"12px 16px", borderBottom:"1px solid #111" },
       clienteNome: { fontFamily:GTA, fontSize:19, letterSpacing:1, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
       divida: { fontFamily:GTA, fontSize:16, color:"#ff3300", whiteSpace:"nowrap" },
       smallBtn: { padding:"7px 11px", background:"#0a0a0a", border:"1px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", whiteSpace:"nowrap" },
       smallBtnGreen: { padding:"7px 11px", background:"#000e00", border:"1px solid #00cc44", color:"#00cc44", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", whiteSpace:"nowrap" },
-      smallBtnOff: { padding:"7px 11px", background:"#060606", border:"1px solid #1a1a1a", color:"#2a2a2a", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"not-allowed", whiteSpace:"nowrap" },
+      smallBtnOff: { padding:"7px 11px", background:"#060606", border:"1px solid #1a1a1a", color:"#aaa", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"not-allowed", whiteSpace:"nowrap" },
       produtoRow: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"15px 16px", borderBottom:"1px solid #111", cursor:"pointer" },
       produtoNome: { fontFamily:GTA, fontSize:22, letterSpacing:2 },
       badge: { fontFamily:GTA, fontSize:12, color:"#f5c800", background:"#0d0d00", border:"1px solid #333", padding:"3px 10px", letterSpacing:1 },
@@ -167,12 +167,12 @@
       stockCard: { background:"#060606", border:"1px solid #111", padding:"14px 12px", display:"flex", flexDirection:"column", gap:5 },
       stockCardNome: { fontFamily:GTA, fontSize:20, letterSpacing:2 },
       stockCardQty: { fontFamily:GTA, fontSize:32, color:"#f5c800", lineHeight:1 },
-      stockCardSub: { fontFamily:GTA, fontSize:11, color:"#333", letterSpacing:1 },
+      stockCardSub: { fontFamily:GTA, fontSize:11, color:"#999", letterSpacing:1 },
       stockCardActions: { display:"flex", gap:4, marginTop:4 },
       stockBtn: { flex:1, padding:"7px 0", background:"#0a0a0a", border:"1px solid #333", color:"#f5c800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", textAlign:"center" },
       stockBtnOrange: { flex:1, padding:"7px 0", background:"#0a0a0a", border:"1px solid #2a1a00", color:"#ff8800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", textAlign:"center" },
       inputWrap: { padding:"18px 16px 0" },
-      inputLabel: { fontFamily:GTA, fontSize:12, color:"#444", letterSpacing:2, display:"block", marginBottom:8 },
+      inputLabel: { fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2, display:"block", marginBottom:8 },
       inputDisplay: { display:"flex", alignItems:"center", width:"100%", padding:"14px 16px", background:"#060606", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:34, letterSpacing:2, minHeight:64, boxSizing:"border-box" },
       textInput: { display:"block", width:"100%", padding:"14px 16px", background:"#060606", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:22, letterSpacing:2, outline:"none", boxSizing:"border-box" },
       numPad: { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, padding:"10px 16px 0" },
@@ -181,20 +181,20 @@
       movCard: { margin:"8px 16px 0", padding:"11px 13px", background:"#050505", borderLeft:"3px solid #f5c800" },
       movHeader: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 },
       movTipo: { fontFamily:GTA, fontSize:14, letterSpacing:2 },
-      movTs: { fontFamily:MONO, fontSize:10, color:"#333" },
-      movBody: { fontFamily:MONO, fontSize:11, color:"#4a4a4a", lineHeight:1.6, marginBottom:8 },
+      movTs: { fontFamily:MONO, fontSize:10, color:"#999" },
+      movBody: { fontFamily:MONO, fontSize:11, color:"#aaa", lineHeight:1.6, marginBottom:8 },
       movFooter: { display:"flex", justifyContent:"flex-end" },
-      undoBtn: { padding:"4px 12px", background:"transparent", border:"1px solid #2a2a2a", color:"#444", fontFamily:GTA, fontSize:11, letterSpacing:1, cursor:"pointer" },
+      undoBtn: { padding:"4px 12px", background:"transparent", border:"1px solid #2a2a2a", color:"#aaa", fontFamily:GTA, fontSize:11, letterSpacing:1, cursor:"pointer" },
       fichaHero: { padding:"20px 16px 14px", borderBottom:"1px solid #111" },
       fichaNome: { fontFamily:GTA, fontSize:28, letterSpacing:2, color:"#fff", lineHeight:1 },
       fichaDivida: { fontFamily:GTA, fontSize:20, color:"#ff3300", marginTop:4 },
-      fichaZero: { fontFamily:GTA, fontSize:14, color:"#2a2a2a", marginTop:4, letterSpacing:2 },
+      fichaZero: { fontFamily:GTA, fontSize:14, color:"#aaa", marginTop:4, letterSpacing:2 },
       fichaActions: { display:"flex", gap:8, marginTop:14 },
       fichaBtn: { flex:1, padding:"10px 0", background:"#0a0a0a", border:"1px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
       fichaBtnGreen: { flex:1, padding:"10px 0", background:"#000e00", border:"1px solid #00cc44", color:"#00cc44", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
       fichaBtnRed: { padding:"10px 16px", background:"transparent", border:"1px solid #330000", color:"#550000", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
-      fichaSection: { fontFamily:GTA, fontSize:11, color:"#333", letterSpacing:3, padding:"14px 16px 6px" },
-      fichaEmpty: { fontFamily:MONO, fontSize:11, color:"#222", padding:"12px 16px", letterSpacing:1 },
+      fichaSection: { fontFamily:GTA, fontSize:11, color:"#999", letterSpacing:3, padding:"14px 16px 6px" },
+      fichaEmpty: { fontFamily:MONO, fontSize:11, color:"#666", padding:"12px 16px", letterSpacing:1 },
     };
 
     const fmtTime = (ts) => {
@@ -226,7 +226,7 @@
               {config.message}
             </div>
             {config.sub && (
-              <div style={{ fontFamily:MONO, fontSize:12, color:"#555", textAlign:"center", marginBottom:28, lineHeight:1.5 }}>
+              <div style={{ fontFamily:MONO, fontSize:12, color:"#aaa", textAlign:"center", marginBottom:28, lineHeight:1.5 }}>
                 {config.sub}
               </div>
             )}
@@ -259,7 +259,7 @@
         <>
           <div style={S.inputWrap}>
             <span style={S.inputLabel}>{label}</span>
-            <div style={S.inputDisplay}>{val ? val : <span style={{color:"#1a1a1a"}}>0</span>}</div>
+            <div style={S.inputDisplay}>{val ? val : <span style={{color:"#333"}}>0</span>}</div>
           </div>
           <div style={S.numPad}>
             {keys.map((d, i) => (
@@ -319,7 +319,7 @@
           </>}
           {phase === "title" && <>
             <div style={{ fontFamily:GTA, fontSize:"clamp(48px,14vw,82px)", color:"#f5c800", letterSpacing:5, textAlign:"center", animation:"titleIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards, pulse 2.5s 0.6s ease infinite", lineHeight:1 }}>SIDE HUSTLE</div>
-            <div style={{ fontFamily:GTA, fontSize:11, color:"#3a3a3a", marginTop:10, animation:"subIn 1s ease forwards", letterSpacing:7 }}>GESTÃO DE NEGÓCIO</div>
+            <div style={{ fontFamily:GTA, fontSize:11, color:"#aaa", marginTop:10, animation:"subIn 1s ease forwards", letterSpacing:7 }}>GESTÃO DE NEGÓCIO</div>
             <div style={{ width:"50%", height:1, background:"#111", marginTop:40, overflow:"hidden" }}>
               <div style={{ height:"100%", background:"linear-gradient(90deg,#f5c800,#fff8cc)", animation:"loadBar 1.8s linear forwards" }} />
             </div>
@@ -436,7 +436,7 @@
       if (step === "tipo") return (
         <>
           <div style={{padding:"20px 16px 8px"}}>
-            <div style={{fontFamily:GTA, fontSize:12, color:"#444", letterSpacing:2, marginBottom:16}}>
+            <div style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2, marginBottom:16}}>
               TIPO DE PRODUTO — {simbolo} {nome.trim().toUpperCase()}
             </div>
             <div style={{display:"flex", gap:10}}>
@@ -447,7 +447,7 @@
               }} onClick={() => { playSound("select"); confirmarTipo("FIXO"); }}>
                 <div style={{fontSize:24, marginBottom:6}}>📌</div>
                 FIXO
-                <div style={{fontSize:11, color:"#555", marginTop:4, letterSpacing:1}}>PREÇO E STOCK DEFINIDOS</div>
+                <div style={{fontSize:11, color:"#aaa", marginTop:4, letterSpacing:1}}>PREÇO E STOCK DEFINIDOS</div>
               </button>
               <button style={{
                 flex:1, padding:"22px 0",
@@ -456,7 +456,7 @@
               }} onClick={() => { playSound("select"); confirmarTipo("VOLATIL"); }}>
                 <div style={{fontSize:24, marginBottom:6}}>🌊</div>
                 VOLÁTIL
-                <div style={{fontSize:11, color:"#555", marginTop:4, letterSpacing:1}}>PREÇO DEFINIDO NA VENDA</div>
+                <div style={{fontSize:11, color:"#aaa", marginTop:4, letterSpacing:1}}>PREÇO DEFINIDO NA VENDA</div>
               </button>
             </div>
           </div>
@@ -681,31 +681,31 @@
           <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
             {totalDividas > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>VENDAS</span>
                 <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
               </div>
             ) : (
               <div style={{display:"flex", alignItems:"center", gap:5}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#1e1e1e", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#999", letterSpacing:2}}>VENDAS</span>
                 <span style={{fontSize:13}}>✅</span>
               </div>
             )}
             {totalEmprestimos > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>EMP.</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>EMP.</span>
                 <span style={{fontFamily:GTA, fontSize:15, color:"#cc44ff"}}>-{totalEmprestimos}€</span>
               </div>
             ) : (
               <div style={{display:"flex", alignItems:"center", gap:5}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#1e1e1e", letterSpacing:2}}>EMP.</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#999", letterSpacing:2}}>EMP.</span>
                 <span style={{fontSize:13}}>✅</span>
               </div>
             )}
           </div>
         );
-        if (screen==="VENDA_PRODUTOS" && clienteVenda) return <div style={{...S.headerMeta,color:"#666"}}>{clienteVenda}</div>;
-        if (screen==="VENDA_PRECO" && produtoVenda) return <div style={{...S.headerMeta,color:"#666"}}>{produtoVenda}</div>;
-        if (screen==="VENDA_UNIDADES" && produtoVenda) return <div style={{...S.headerMeta,color:"#666"}}>{produtoVenda} · {db.produtos[produtoVenda].tipo==="VOLATIL" ? valorVolatil : (db.produtos[produtoVenda].preco ?? 0)}€</div>;
+        if (screen==="VENDA_PRODUTOS" && clienteVenda) return <div style={{...S.headerMeta,color:"#999"}}>{clienteVenda}</div>;
+        if (screen==="VENDA_PRECO" && produtoVenda) return <div style={{...S.headerMeta,color:"#999"}}>{produtoVenda}</div>;
+        if (screen==="VENDA_UNIDADES" && produtoVenda) return <div style={{...S.headerMeta,color:"#999"}}>{produtoVenda} · {db.produtos[produtoVenda].tipo==="VOLATIL" ? valorVolatil : (db.produtos[produtoVenda].preco ?? 0)}€</div>;
         if (screen==="PAGAMENTO" && clientePagamento) return <div style={{...S.headerMeta,color:"#ff3300"}}>-{db.clientes[clientePagamento]?.divida ?? 0}€</div>;
         return null;
       };
@@ -768,7 +768,7 @@
                       background:"#060606",
                       border:"1px solid #222",
                       borderLeft:"3px solid #333",
-                      color:"#555",
+                      color:"#aaa",
                       fontFamily:GTA, fontSize:15, letterSpacing:3, cursor:"pointer",
                     }}
                     onClick={importDB}>
@@ -779,7 +779,7 @@
 
               {/* CLIENTES */}
               {screen==="CLIENTES" && <>
-                {Object.keys(db.clientes).length === 0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#1e1e1e",fontSize:14,letterSpacing:2}}>NENHUM CLIENTE</div>}
+                {Object.keys(db.clientes).length === 0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>NENHUM CLIENTE</div>}
                 {Object.entries(db.clientes).map(([nome, c]) => (
                   <div key={nome} style={S.clienteRow}>
                     <span style={{...S.clienteNome, cursor:"pointer"}} onClick={() => { playSound("select"); setFichaCliente(nome); goto("FICHA_CLIENTE"); }}>{nome}</span>
@@ -809,12 +809,12 @@
                       <div style={S.fichaNome}>{fichaCliente}</div>
                       {c.divida > 0 ? <div style={S.fichaDivida}>-{c.divida}€ em dívida</div> : <div style={S.fichaZero}>SEM DÍVIDA</div>}
                       <div style={{display:"flex",gap:24,marginTop:12}}>
-                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#333",letterSpacing:2}}>TOTAL GASTO</div><div style={{fontFamily:GTA,fontSize:18,color:"#f5c800"}}>{totalGasto}€</div></div>
-                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#333",letterSpacing:2}}>TOTAL PAGO</div><div style={{fontFamily:GTA,fontSize:18,color:"#00cc44"}}>{totalPago}€</div></div>
+                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#999",letterSpacing:2}}>TOTAL GASTO</div><div style={{fontFamily:GTA,fontSize:18,color:"#f5c800"}}>{totalGasto}€</div></div>
+                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#999",letterSpacing:2}}>TOTAL PAGO</div><div style={{fontFamily:GTA,fontSize:18,color:"#00cc44"}}>{totalPago}€</div></div>
                       </div>
                       <div style={S.fichaActions}>
                         <button style={S.fichaBtn} onClick={() => { playSound("select"); setClienteVenda(fichaCliente); goto("VENDA_PRODUTOS"); }}>VENDER</button>
-                        <button style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#2a2a2a",cursor:"not-allowed"}} disabled={!c.divida}
+                        <button style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#aaa",cursor:"not-allowed"}} disabled={!c.divida}
                           onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>PAGAR</button>
                         <button style={S.fichaBtnRed} onClick={() => {
                           playSound("back");
@@ -850,17 +850,17 @@
                   <>
                     {totalEmp > 0 ? (
                       <div style={{padding:"12px 16px 8px", borderBottom:"1px solid #111", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-                        <span style={{fontFamily:GTA, fontSize:12, color:"#444", letterSpacing:2}}>TOTAL EM DÍVIDA</span>
+                        <span style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>TOTAL EM DÍVIDA</span>
                         <span style={{fontFamily:GTA, fontSize:20, color:"#cc44ff"}}>-{totalEmp}€</span>
                       </div>
                     ) : (
                       <div style={{padding:"20px 16px 12px", borderBottom:"1px solid #111", display:"flex", alignItems:"center", gap:10}}>
                         <span style={{fontSize:22}}>✅</span>
-                        <span style={{fontFamily:GTA, fontSize:14, color:"#2a2a2a", letterSpacing:2}}>TUDO LIQUIDADO</span>
+                        <span style={{fontFamily:GTA, fontSize:14, color:"#aaa", letterSpacing:2}}>TUDO LIQUIDADO</span>
                       </div>
                     )}
                     {clientesComEmp.length === 0 && (
-                      <div style={{padding:"20px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>SEM EMPRÉSTIMOS ACTIVOS</div>
+                      <div style={{padding:"20px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>SEM EMPRÉSTIMOS ACTIVOS</div>
                     )}
                     {clientesComEmp.map(([nome, c]) => (
                       <div key={nome} style={{...S.clienteRow, borderLeft:"3px solid #cc44ff"}}>
@@ -882,9 +882,9 @@
 
               {/* EMPRESTIMO — ESCOLHER CLIENTE */}
               {screen==="EMPRESTIMO_CLIENTE" && <>
-                <div style={{padding:"10px 16px 4px", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>SELECIONAR CLIENTE</div>
+                <div style={{padding:"10px 16px 4px", fontFamily:GTA, fontSize:11, color:"#aaa", letterSpacing:2}}>SELECIONAR CLIENTE</div>
                 {Object.keys(db.clientes).length === 0 && (
-                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>CRIA UM CLIENTE PRIMEIRO</div>
+                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>CRIA UM CLIENTE PRIMEIRO</div>
                 )}
                 {Object.entries(db.clientes).map(([nome, c]) => (
                   <div key={nome} style={S.produtoRow} onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("EMPRESTIMO_VALOR"); }}>
@@ -933,7 +933,7 @@
                   <div key={p} style={S.produtoRow} onClick={() => { playSound("select"); escolherProduto(p); }}>
                     <div>
                       <div style={S.produtoNome}>{p}</div>
-                      {prod.preco != null && <div style={{fontFamily:GTA,fontSize:12,color:"#444",marginTop:2}}>{prod.preco}€ / UNID</div>}
+                      {prod.preco != null && <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",marginTop:2}}>{prod.preco}€ / UNID</div>}
                     </div>
                     {prod.tipo==="FIXO" ? <span style={prod.stock===0 ? S.badgeRed : S.badge}>STOCK {prod.stock}</span> : <span style={S.badge}>VOLATIL</span>}
                   </div>
@@ -953,7 +953,7 @@
               {/* STOCK */}
               {screen==="STOCK" && <>
                 {Object.keys(db.produtos).length === 0 && (
-                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>
+                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>
                     SEM PRODUTOS — ADICIONA O PRIMEIRO
                   </div>
                 )}
@@ -963,7 +963,7 @@
                     return (
                       <div key={n} style={{...S.stockCard, borderColor:"#111"}}>
                         <div style={{fontSize:28, lineHeight:1}}>{disp.emoji}</div>
-                        <div style={{fontFamily:GTA, fontSize:13, color:"#555", letterSpacing:2, marginTop:2}}>{disp.label}</div>
+                        <div style={{fontFamily:GTA, fontSize:13, color:"#aaa", letterSpacing:2, marginTop:2}}>{disp.label}</div>
                         <div style={{...S.stockCardQty, color:"#f5c800"}}>{p.stock}</div>
                         <div style={S.stockCardSub}>{p.tipo==="FIXO"&&p.preco!=null ? `${p.preco}€/UNID` : "PREÇO VARIÁVEL"}</div>
                         <div style={S.stockCardActions}>
@@ -998,7 +998,7 @@
 
               {/* MOVIMENTOS */}
               {screen==="MOVIMENTOS" && <>
-                {db.movimentos.length===0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#1e1e1e",fontSize:14,letterSpacing:2}}>SEM MOVIMENTOS</div>}
+                {db.movimentos.length===0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM MOVIMENTOS</div>}
                 {db.movimentos.map(m => {
                   const cor = MOV_COLOR[m.tipo] ?? "#f5c800";
                   let detalhe = "";
