@@ -192,6 +192,7 @@
       fichaActions: { display:"flex", gap:8, marginTop:14 },
       fichaBtn: { flex:1, padding:"10px 0", background:"#0a0a0a", border:"1px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
       fichaBtnGreen: { flex:1, padding:"10px 0", background:"#000e00", border:"1px solid #00cc44", color:"#00cc44", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
+      fichaBtnPurple: { flex:1, padding:"10px 0", background:"#0a0010", border:"1px solid #cc44ff", color:"#cc44ff", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
       fichaBtnRed: { padding:"10px 16px", background:"transparent", border:"1px solid #330000", color:"#550000", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
       fichaSection: { fontFamily:GTA, fontSize:11, color:"#999", letterSpacing:3, padding:"14px 16px 6px" },
       fichaEmpty: { fontFamily:MONO, fontSize:11, color:"#666", padding:"12px 16px", letterSpacing:1 },
@@ -806,15 +807,18 @@
               {/* CLIENTES */}
               {screen==="CLIENTES" && <>
                 {Object.keys(db.clientes).length === 0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>NENHUM CLIENTE</div>}
-                {Object.entries(db.clientes).map(([nome, c]) => (
-                  <div key={nome} style={S.clienteRow}>
-                    <span style={{...S.clienteNome, cursor:"pointer"}} onClick={() => { playSound("select"); setFichaCliente(nome); goto("FICHA_CLIENTE"); }}>{nome}</span>
-                    {c.divida > 0 && <span style={S.divida}>-{c.divida}€</span>}
-                    <button style={S.smallBtn} onClick={() => { playSound("select"); setClienteVenda(nome); goto("VENDA_PRODUTOS"); }}>VENDER</button>
-                    <button style={c.divida>0 ? S.smallBtnGreen : S.smallBtnOff} disabled={!c.divida}
-                      onClick={() => { playSound("select"); setPagarOrigem("CLIENTES"); setClientePagamento(nome); goto("PAGAMENTO"); }}>PAGAR</button>
-                  </div>
-                ))}
+                {Object.entries(db.clientes).map(([nome, c]) => {
+                  const totalDevido = (c.divida||0) + (c.emprestimo||0);
+                  return (
+                    <div key={nome} style={S.clienteRow}>
+                      <span style={{...S.clienteNome, cursor:"pointer"}} onClick={() => { playSound("select"); setFichaCliente(nome); goto("FICHA_CLIENTE"); }}>{nome}</span>
+                      {totalDevido > 0 && <span style={S.divida}>-{totalDevido}€</span>}
+                      <button style={S.smallBtn} onClick={() => { playSound("select"); setClienteVenda(nome); goto("VENDA_PRODUTOS"); }}>VENDER</button>
+                      <button style={c.divida>0 ? S.smallBtnGreen : S.smallBtnOff} disabled={!c.divida}
+                        onClick={() => { playSound("select"); setClientePagamento(nome); goto("PAGAMENTO"); }}>PAGAR</button>
+                    </div>
+                  );
+                })}
                 <button style={S.menuBtn} onClick={() => { playSound("select"); goto("NOVO_CLIENTE"); }}>+ NOVO CLIENTE</button>
                 <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
               </>}
@@ -826,44 +830,118 @@
               {screen==="FICHA_CLIENTE" && fichaCliente && (() => {
                 const c = db.clientes[fichaCliente];
                 if (!c) { goto("CLIENTES"); return null; }
-                const movs = db.movimentos.filter(m => (m.tipo==="VENDA"||m.tipo==="PAGAMENTO") && m.cliente===fichaCliente);
-                const totalGasto = movs.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
-                const totalPago  = movs.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0);
+                const totalDevido = (c.divida||0) + (c.emprestimo||0);
+                // movimentos de vendas
+                const movsVenda = db.movimentos.filter(m => (m.tipo==="VENDA"||m.tipo==="PAGAMENTO") && m.cliente===fichaCliente);
+                const totalGasto = movsVenda.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
+                const totalPago  = movsVenda.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0);
+                // movimentos de empréstimos
+                const movsEmp = db.movimentos.filter(m => (m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO") && m.cliente===fichaCliente);
+                const totalEmprestado = movsEmp.filter(m=>m.tipo==="EMPRESTIMO").reduce((s,m)=>s+m.valor,0);
+                const totalEmpPago    = movsEmp.filter(m=>m.tipo==="PAGAMENTO_EMPRESTIMO").reduce((s,m)=>s+m.valor,0);
+                // todos os movimentos deste cliente
+                const todosMovs = db.movimentos.filter(m => m.cliente===fichaCliente);
                 return (
                   <>
                     <div style={S.fichaHero}>
                       <div style={S.fichaNome}>{fichaCliente}</div>
-                      {c.divida > 0 ? <div style={S.fichaDivida}>-{c.divida}€ em dívida</div> : <div style={S.fichaZero}>SEM DÍVIDA</div>}
-                      <div style={{display:"flex",gap:24,marginTop:12}}>
-                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#999",letterSpacing:2}}>TOTAL GASTO</div><div style={{fontFamily:GTA,fontSize:18,color:"#f5c800"}}>{totalGasto}€</div></div>
-                        <div><div style={{fontFamily:GTA,fontSize:10,color:"#999",letterSpacing:2}}>TOTAL PAGO</div><div style={{fontFamily:GTA,fontSize:18,color:"#00cc44"}}>{totalPago}€</div></div>
+
+                      {/* Dívida total */}
+                      {totalDevido > 0
+                        ? <div style={{...S.fichaDivida, marginTop:6}}>-{totalDevido}€ total em dívida</div>
+                        : <div style={S.fichaZero}>SEM DÍVIDAS</div>
+                      }
+
+                      {/* Breakdown vendas + empréstimos */}
+                      <div style={{display:"flex", gap:16, marginTop:12, flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>VENDAS</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:(c.divida||0)>0?"#ff3300":"#333"}}>
+                            {(c.divida||0)>0 ? `-${c.divida}€` : "✅"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>EMPRÉSTIMO</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:(c.emprestimo||0)>0?"#cc44ff":"#333"}}>
+                            {(c.emprestimo||0)>0 ? `-${c.emprestimo}€` : "✅"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>GASTO TOTAL</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:"#f5c800"}}>{totalGasto}€</div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>PAGO TOTAL</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:"#00cc44"}}>{totalPago + totalEmpPago}€</div>
+                        </div>
                       </div>
+
+                      {/* Acções */}
                       <div style={S.fichaActions}>
-                        <button style={S.fichaBtn} onClick={() => { playSound("select"); setClienteVenda(fichaCliente); goto("VENDA_PRODUTOS"); }}>VENDER</button>
-                        <button style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#aaa",cursor:"not-allowed"}} disabled={!c.divida}
-                          onClick={() => { playSound("select"); setPagarOrigem("CLIENTES"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>PAGAR</button>
+                        <button style={S.fichaBtn}
+                          onClick={() => { playSound("select"); setClienteVenda(fichaCliente); goto("VENDA_PRODUTOS"); }}>
+                          VENDER
+                        </button>
+                        <button style={S.fichaBtnPurple}
+                          onClick={() => { playSound("select"); setEmpClienteSel(fichaCliente); goto("EMPRESTIMO_VALOR"); }}>
+                          EMPRESTAR
+                        </button>
+                        <button
+                          style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#333",cursor:"not-allowed"}}
+                          disabled={!(c.divida>0)}
+                          onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>
+                          PAGAR
+                        </button>
+                        {(c.emprestimo||0) > 0 && (
+                          <button style={{...S.fichaBtnPurple, borderColor:"#44ffcc", color:"#44ffcc"}}
+                            onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO_EMP"); }}>
+                            REC.EMP
+                          </button>
+                        )}
                         <button style={S.fichaBtnRed} onClick={() => {
                           playSound("back");
-                          if (c.divida > 0) { ask({ message:"LIQUIDA A DÍVIDA PRIMEIRO", sub:`${fichaCliente} tem -${c.divida}€ em aberto.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} }); return; }
+                          if (totalDevido > 0) { ask({ message:"LIQUIDA AS DÍVIDAS PRIMEIRO", sub:`${fichaCliente} tem -${totalDevido}€ em aberto.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} }); return; }
                           ask({ message:`ELIMINAR ${fichaCliente}?`, sub:"Esta acção não pode ser revertida.", confirmLabel:"ELIMINAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarCliente(fichaCliente) });
                         }}>🗑</button>
                       </div>
                     </div>
-                    <div style={S.fichaSection}>HISTÓRICO DO CLIENTE</div>
-                    {movs.length === 0 && <div style={S.fichaEmpty}>SEM MOVIMENTOS</div>}
-                    {movs.map(m => {
-                      const cor = m.tipo==="VENDA" ? "#f5c800" : "#00cc44";
-                      const detalhe = m.tipo==="VENDA"
-                        ? `${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`
-                        : `+${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
-                      return (
-                        <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
-                          <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="VENDA"?"💰":"✅"}  {m.tipo}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
-                          <div style={S.movBody}>{detalhe}</div>
-                          {m.tipo==="VENDA" && <div style={S.movFooter}><button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => { undoVenda(m); goto("CLIENTES"); } })}>↩ UNDO</button></div>}
-                        </div>
-                      );
-                    })}
+
+                    {/* Histórico de vendas */}
+                    {movsVenda.length > 0 && <>
+                      <div style={S.fichaSection}>VENDAS</div>
+                      {movsVenda.map(m => {
+                        const cor = m.tipo==="VENDA" ? "#f5c800" : "#00cc44";
+                        const detalhe = m.tipo==="VENDA"
+                          ? `${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`
+                          : `+${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                        return (
+                          <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                            <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="VENDA"?"💰":"✅"}  {m.tipo}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                            <div style={S.movBody}>{detalhe}</div>
+                            {m.tipo==="VENDA" && <div style={S.movFooter}><button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => { undoVenda(m); goto("CLIENTES"); } })}>↩ UNDO</button></div>}
+                          </div>
+                        );
+                      })}
+                    </>}
+
+                    {/* Histórico de empréstimos */}
+                    {movsEmp.length > 0 && <>
+                      <div style={S.fichaSection}>EMPRÉSTIMOS</div>
+                      {movsEmp.map(m => {
+                        const cor = m.tipo==="EMPRESTIMO" ? "#cc44ff" : "#44ffcc";
+                        const detalhe = m.tipo==="EMPRESTIMO"
+                          ? `${m.valor}€${m.descricao && m.descricao!=="—" ? "  ·  "+m.descricao : ""}`
+                          : `+${m.valor}€ recebido${m.metodo ? "  ·  "+m.metodo : ""}`;
+                        return (
+                          <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                            <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="EMPRESTIMO"?"🤝":"💸"}  {m.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                            <div style={S.movBody}>{detalhe}</div>
+                          </div>
+                        );
+                      })}
+                    </>}
+
+                    {todosMovs.length === 0 && <div style={S.fichaEmpty}>SEM MOVIMENTOS</div>}
                     <button style={S.backBtn} onClick={() => { playSound("back"); goto("CLIENTES"); }}>← VOLTAR</button>
                   </>
                 );
