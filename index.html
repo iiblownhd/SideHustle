@@ -514,19 +514,6 @@
       const [empValor, setEmpValor]                 = useState(0);
       const [pagarOrigem, setPagarOrigem]           = useState("CLIENTES");
       const [pagarValorPendente, setPagarValorPendente] = useState(0);
-
-      const pagar = (metodo) => {
-        if (!clientePagamento || pagarValorPendente <= 0) return;
-        const divida = db.clientes[clientePagamento].divida;
-        if (pagarValorPendente > divida) return;
-        const tipo = pagarOrigem === "EMPRESTIMOS" ? "PAGAMENTO_EMPRESTIMO" : "PAGAMENTO";
-        setDb(d => ({
-          ...d,
-          clientes: { ...d.clientes, [clientePagamento]: { divida: d.clientes[clientePagamento].divida - pagarValorPendente } },
-          movimentos: [{ tipo, cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
-        }));
-        goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES");
-      };
       const [prodDisplayExtra, setProdDisplayExtra] = useState(() => {
         try { return JSON.parse(localStorage.getItem("sh_display") || "{}"); } catch { return {}; }
       });
