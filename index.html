@@ -476,7 +476,8 @@
         goto("EMPRESTIMOS");
       };
 
-      const totalDividas = Object.values(db.clientes).reduce((s,c) => s + c.divida, 0);
+      const totalDividas    = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
+      const totalEmprestimos = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
       const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER" };
 
       const [saveFlash, setSaveFlash] = useState(false);
@@ -531,7 +532,22 @@
       };
 
       const renderMeta = () => {
-        if (screen==="MENU" && totalDividas>0) return <div style={S.headerMeta}><div style={{fontSize:10,color:"#444",letterSpacing:2}}>EM DÍVIDA</div><div style={{color:"#ff3300",fontSize:17}}>-{totalDividas}€</div></div>;
+        if (screen==="MENU" && (totalDividas>0 || totalEmprestimos>0)) return (
+          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
+            {totalDividas > 0 && (
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
+              </div>
+            )}
+            {totalEmprestimos > 0 && (
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>EMP.</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#cc44ff"}}>-{totalEmprestimos}€</span>
+              </div>
+            )}
+          </div>
+        );
         if (screen==="VENDA_PRODUTOS" && clienteVenda) return <div style={{...S.headerMeta,color:"#666"}}>{clienteVenda}</div>;
         if (screen==="VENDA_PRECO" && produtoVenda) return <div style={{...S.headerMeta,color:"#666"}}>{produtoVenda}</div>;
         if (screen==="VENDA_UNIDADES" && produtoVenda) return <div style={{...S.headerMeta,color:"#666"}}>{produtoVenda} · {db.produtos[produtoVenda].tipo==="VOLATIL" ? valorVolatil : (db.produtos[produtoVenda].preco ?? 0)}€</div>;
