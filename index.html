@@ -545,22 +545,36 @@
       /* CLIENTES */
       const criarCliente = (nome) => {
         if (!nome.trim()) return;
-        setDb(d => ({ ...d, clientes: { ...d.clientes, [nome.trim().toUpperCase()]: { divida: 0 } } }));
+        setDb(d => ({ ...d, clientes: { ...d.clientes, [nome.trim().toUpperCase()]: { divida: 0, emprestimo: 0 } } }));
         goto("CLIENTES");
       };
-      const pagar = (valor) => {
-        if (!clientePagamento) return;
+
+      // Pagar dívida de VENDAS
+      const pagar = (metodo) => {
+        if (!clientePagamento || pagarValorPendente <= 0) return;
         const divida = db.clientes[clientePagamento].divida;
-        if (valor <= 0 || valor > divida) return;
-        // Se vem da tela de empréstimos, regista como PAGAMENTO_EMPRESTIMO para o contador separado
-        const tipo = pagarOrigem === "EMPRESTIMOS" ? "PAGAMENTO_EMPRESTIMO" : "PAGAMENTO";
+        if (pagarValorPendente > divida) return;
         setDb(d => ({
           ...d,
-          clientes: { ...d.clientes, [clientePagamento]: { divida: d.clientes[clientePagamento].divida - valor } },
-          movimentos: [{ tipo, cliente:clientePagamento, valor, ts:Date.now() }, ...d.movimentos]
+          clientes: { ...d.clientes, [clientePagamento]: { ...d.clientes[clientePagamento], divida: d.clientes[clientePagamento].divida - pagarValorPendente } },
+          movimentos: [{ tipo:"PAGAMENTO", cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
         }));
-        goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES");
+        goto("CLIENTES");
       };
+
+      // Pagar empréstimo (campo separado)
+      const pagarEmprestimo = (metodo) => {
+        if (!clientePagamento || pagarValorPendente <= 0) return;
+        const emp = db.clientes[clientePagamento].emprestimo || 0;
+        if (pagarValorPendente > emp) return;
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [clientePagamento]: { ...d.clientes[clientePagamento], emprestimo: d.clientes[clientePagamento].emprestimo - pagarValorPendente } },
+          movimentos: [{ tipo:"PAGAMENTO_EMPRESTIMO", cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto("EMPRESTIMOS");
+      };
+
       const eliminarCliente = (nome) => {
         setDb(d => { const novos = { ...d.clientes }; delete novos[nome]; return { ...d, clientes: novos }; });
         goto("CLIENTES");
@@ -581,7 +595,7 @@
         const valor = preco * u;
         setDb(d => ({ ...d,
           produtos: { ...d.produtos, [produtoVenda]: { ...prod, stock: Math.max(0, prod.stock - u) } },
-          clientes: { ...d.clientes, [clienteVenda]: { divida: d.clientes[clienteVenda].divida + valor } },
+          clientes: { ...d.clientes, [clienteVenda]: { ...d.clientes[clienteVenda], divida: (d.clientes[clienteVenda].divida||0) + valor } },
           movimentos: [{ tipo:"VENDA", cliente:clienteVenda, produto:produtoVenda, unidades:u, valor, valorUnit:preco, ts:Date.now() }, ...d.movimentos]
         }));
         goto("CLIENTES");
@@ -593,7 +607,7 @@
           const prod = d.produtos[mov.produto];
           return { ...d,
             produtos: { ...d.produtos, [mov.produto]: { ...prod, stock: prod.stock + mov.unidades } },
-            clientes: { ...d.clientes, [mov.cliente]: { divida: Math.max(0, d.clientes[mov.cliente].divida - mov.valor) } },
+            clientes: { ...d.clientes, [mov.cliente]: { ...d.clientes[mov.cliente], divida: Math.max(0, (d.clientes[mov.cliente].divida||0) - mov.valor) } },
             movimentos: d.movimentos.filter(m => m.ts !== mov.ts)
           };
         });
@@ -639,24 +653,16 @@
         if (!empClienteSel || empValor <= 0) return;
         setDb(d => ({
           ...d,
-          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], divida: (d.clientes[empClienteSel].divida || 0) + empValor } },
+          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], emprestimo: (d.clientes[empClienteSel].emprestimo || 0) + empValor } },
           movimentos: [{ tipo:"EMPRESTIMO", cliente:empClienteSel, valor:empValor, descricao, ts:Date.now() }, ...d.movimentos],
         }));
         goto("EMPRESTIMOS");
       };
 
-      // Dívida de vendas = soma VENDA - soma PAGAMENTO (movimentos)
-      const totalVendasMov    = db.movimentos.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
-      const totalPagamentoMov = db.movimentos.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0);
-      const totalVendasDivida = Math.max(0, totalVendasMov - totalPagamentoMov);
-
-      // Dívida de empréstimos = soma EMPRESTIMO - soma PAGAMENTO_EMPRESTIMO (movimentos)
-      const totalEmprestimos  = Math.max(0, db.movimentos
-        .filter(m=>m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO")
-        .reduce((s,m)=>s+(m.tipo==="EMPRESTIMO"?m.valor:-m.valor),0));
-
-      const totalDividas = Object.values(db.clientes).reduce((s,c)=>s+(c.divida||0),0);
-      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", METODO_PAGAMENTO:"MÉTODO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", NOVO_PRODUTO:"NOVO PRODUTO" };
+      // Ler directamente dos campos do cliente — sem dependência de movimentos
+      const totalDividas     = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
+      const totalEmprestimos = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
+      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", PAGAMENTO_EMP:"RECEBER EMP.", METODO_PAGAMENTO:"MÉTODO", METODO_EMP:"MÉTODO EMP.", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", NOVO_PRODUTO:"NOVO PRODUTO" };
 
       const [saveFlash, setSaveFlash] = useState(false);
 
@@ -712,10 +718,10 @@
       const renderMeta = () => {
         if (screen==="MENU") return (
           <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
-            {totalVendasDivida > 0 ? (
+            {totalDividas > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
                 <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>VENDAS</span>
-                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalVendasDivida}€</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
               </div>
             ) : (
               <div style={{display:"flex", alignItems:"center", gap:5}}>
@@ -878,11 +884,8 @@
 
               {/* EMPRESTIMOS */}
               {screen==="EMPRESTIMOS" && (() => {
-                // Clientes com pelo menos um movimento de empréstimo e dívida activa
-                const clientesComEmp = Object.entries(db.clientes).filter(([nome, c]) =>
-                  db.movimentos.some(m => m.tipo==="EMPRESTIMO" && m.cliente===nome) && (c.divida||0) > 0
-                );
-                const totalEmp = Math.max(0, totalEmprestimos);
+                const clientesComEmp = Object.entries(db.clientes).filter(([, c]) => (c.emprestimo || 0) > 0);
+                const totalEmp = clientesComEmp.reduce((s,[,c]) => s + (c.emprestimo||0), 0);
                 return (
                   <>
                     {totalEmp > 0 ? (
@@ -902,9 +905,9 @@
                     {clientesComEmp.map(([nome, c]) => (
                       <div key={nome} style={{...S.clienteRow, borderLeft:"3px solid #cc44ff"}}>
                         <span style={S.clienteNome}>{nome}</span>
-                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.divida}€</span>
+                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.emprestimo}€</span>
                         <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
-                          onClick={() => { playSound("select"); setPagarOrigem("EMPRESTIMOS"); setClientePagamento(nome); goto("PAGAMENTO"); }}>
+                          onClick={() => { playSound("select"); setPagarOrigem("EMPRESTIMOS"); setClientePagamento(nome); goto("PAGAMENTO_EMP"); }}>
                           RECEBER
                         </button>
                       </div>
@@ -951,46 +954,73 @@
                 />
               )}
 
-              {/* PAGAMENTO — introduzir valor */}
+              {/* PAGAMENTO — dívidas de vendas */}
               {screen==="PAGAMENTO" && clientePagamento && (
                 <NumPadInput decimals
-                  label={`${clientePagamento} · DÍVIDA: ${db.clientes[clientePagamento].divida}€`}
+                  label={`${clientePagamento} · DÍVIDA VENDAS: ${db.clientes[clientePagamento].divida||0}€`}
                   onConfirm={(v) => {
-                    if (v > db.clientes[clientePagamento].divida) return;
+                    if (v > (db.clientes[clientePagamento].divida||0)) return;
                     setPagarValorPendente(v);
                     goto("METODO_PAGAMENTO");
                   }}
-                  onBack={() => goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES")}
+                  onBack={() => goto("CLIENTES")}
                 />
               )}
 
-              {/* METODO PAGAMENTO */}
+              {/* METODO PAGAMENTO — vendas */}
               {screen==="METODO_PAGAMENTO" && clientePagamento && (
                 <>
                   <div style={{padding:"16px 16px 6px", fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>
                     {clientePagamento}  ·  {pagarValorPendente}€
                   </div>
-                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>
-                    COMO RECEBESTE?
-                  </div>
+                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>COMO RECEBESTE?</div>
                   {[
-                    { id:"DINHEIRO",      icon:"💵", label:"DINHEIRO" },
-                    { id:"MBWAY",         icon:"📱", label:"MBWAY" },
+                    { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
+                    { id:"MBWAY", icon:"📱", label:"MBWAY" },
                     { id:"TRANSFERÊNCIA", icon:"🏦", label:"TRANSFERÊNCIA" },
-                    { id:"OUTRO",         icon:"💳", label:"OUTRO" },
+                    { id:"OUTRO", icon:"💳", label:"OUTRO" },
                   ].map(m => (
-                    <button key={m.id} style={{
-                      display:"flex", alignItems:"center", gap:14,
-                      width:"calc(100% - 32px)", margin:"10px 16px 0",
-                      padding:"16px 18px",
-                      background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800",
-                      color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer",
-                    }} onClick={() => { playSound("confirm"); pagar(m.id); }}>
-                      <span style={{fontSize:26}}>{m.icon}</span>
-                      {m.label}
+                    <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
+                      onClick={() => { playSound("confirm"); pagar(m.id); }}>
+                      <span style={{fontSize:26}}>{m.icon}</span>{m.label}
                     </button>
                   ))}
                   <button style={S.backBtn} onClick={() => { playSound("back"); goto("PAGAMENTO"); }}>← VOLTAR</button>
+                </>
+              )}
+
+              {/* PAGAMENTO_EMP — receber empréstimo */}
+              {screen==="PAGAMENTO_EMP" && clientePagamento && (
+                <NumPadInput decimals
+                  label={`${clientePagamento} · EMPRÉSTIMO: ${db.clientes[clientePagamento].emprestimo||0}€`}
+                  onConfirm={(v) => {
+                    if (v > (db.clientes[clientePagamento].emprestimo||0)) return;
+                    setPagarValorPendente(v);
+                    goto("METODO_EMP");
+                  }}
+                  onBack={() => goto("EMPRESTIMOS")}
+                />
+              )}
+
+              {/* METODO_EMP — método pagamento empréstimo */}
+              {screen==="METODO_EMP" && clientePagamento && (
+                <>
+                  <div style={{padding:"16px 16px 6px", fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>
+                    {clientePagamento}  ·  {pagarValorPendente}€
+                  </div>
+                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>COMO RECEBESTE?</div>
+                  {[
+                    { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
+                    { id:"MBWAY", icon:"📱", label:"MBWAY" },
+                    { id:"TRANSFERÊNCIA", icon:"🏦", label:"TRANSFERÊNCIA" },
+                    { id:"OUTRO", icon:"💳", label:"OUTRO" },
+                  ].map(m => (
+                    <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #cc44ff", color:"#cc44ff", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
+                      onClick={() => { playSound("confirm"); pagarEmprestimo(m.id); }}>
+                      <span style={{fontSize:26}}>{m.icon}</span>{m.label}
+                    </button>
+                  ))}
+                  <button style={S.backBtn} onClick={() => { playSound("back"); goto("PAGAMENTO_EMP"); }}>← VOLTAR</button>
                 </>
               )}
 
