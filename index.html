@@ -402,7 +402,7 @@
             <input autoFocus style={{...S.textInput, textTransform:"uppercase"}}
               value={nome} onChange={e => setNome(e.target.value)}
               onKeyDown={e => { if(e.key==="Enter"&&nome.trim()){playSound("confirm");confirmarNome();} }}
-              placeholder="EX: 3X, GANZA, FULL..." />
+              placeholder="EX: 3X, FULL, EXTRA..." />
           </div>
           <button style={{...S.confirmBtn, opacity: nome.trim() ? 1 : 0.3}}
             onClick={() => { if(nome.trim()){playSound("confirm");confirmarNome();} }}>
