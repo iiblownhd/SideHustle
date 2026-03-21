@@ -609,11 +609,17 @@
         goto("EMPRESTIMOS");
       };
 
-      const totalDividas     = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
-      // Total emprestado ainda por receber = soma dos EMPRESTIMO - soma dos PAGAMENTO_EMPRESTIMO
-      const totalEmprestimos = db.movimentos
-        .filter(m => m.tipo==="EMPRESTIMO" || m.tipo==="PAGAMENTO_EMPRESTIMO")
-        .reduce((s,m) => s + (m.tipo==="EMPRESTIMO" ? m.valor : -m.valor), 0);
+      // Dívida de vendas = soma VENDA - soma PAGAMENTO (movimentos)
+      const totalVendasMov    = db.movimentos.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
+      const totalPagamentoMov = db.movimentos.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0);
+      const totalVendasDivida = Math.max(0, totalVendasMov - totalPagamentoMov);
+
+      // Dívida de empréstimos = soma EMPRESTIMO - soma PAGAMENTO_EMPRESTIMO (movimentos)
+      const totalEmprestimos  = Math.max(0, db.movimentos
+        .filter(m=>m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO")
+        .reduce((s,m)=>s+(m.tipo==="EMPRESTIMO"?m.valor:-m.valor),0));
+
+      const totalDividas = Object.values(db.clientes).reduce((s,c)=>s+(c.divida||0),0);
       const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER", NOVO_PRODUTO:"NOVO PRODUTO" };
 
       const [saveFlash, setSaveFlash] = useState(false);
@@ -670,14 +676,14 @@
       const renderMeta = () => {
         if (screen==="MENU") return (
           <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
-            {totalDividas > 0 ? (
+            {totalVendasDivida > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
                 <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>VENDAS</span>
-                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalVendasDivida}€</span>
               </div>
             ) : (
               <div style={{display:"flex", alignItems:"center", gap:5}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#999", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:2}}>VENDAS</span>
                 <span style={{fontSize:13}}>✅</span>
               </div>
             )}
@@ -688,7 +694,7 @@
               </div>
             ) : (
               <div style={{display:"flex", alignItems:"center", gap:5}}>
-                <span style={{fontFamily:GTA, fontSize:10, color:"#999", letterSpacing:2}}>EMP.</span>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:2}}>EMP.</span>
                 <span style={{fontSize:13}}>✅</span>
               </div>
             )}
