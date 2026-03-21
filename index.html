@@ -532,18 +532,28 @@
       };
 
       const renderMeta = () => {
-        if (screen==="MENU" && (totalDividas>0 || totalEmprestimos>0)) return (
+        if (screen==="MENU") return (
           <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
-            {totalDividas > 0 && (
+            {totalDividas > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
                 <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>VENDAS</span>
                 <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
               </div>
+            ) : (
+              <div style={{display:"flex", alignItems:"center", gap:5}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#1e1e1e", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontSize:13}}>✅</span>
+              </div>
             )}
-            {totalEmprestimos > 0 && (
+            {totalEmprestimos > 0 ? (
               <div style={{display:"flex", alignItems:"center", gap:6}}>
                 <span style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>EMP.</span>
                 <span style={{fontFamily:GTA, fontSize:15, color:"#cc44ff"}}>-{totalEmprestimos}€</span>
+              </div>
+            ) : (
+              <div style={{display:"flex", alignItems:"center", gap:5}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#1e1e1e", letterSpacing:2}}>EMP.</span>
+                <span style={{fontSize:13}}>✅</span>
               </div>
             )}
           </div>
@@ -688,36 +698,33 @@
 
               {/* EMPRESTIMOS */}
               {screen==="EMPRESTIMOS" && (() => {
-                const comEmp = Object.entries(db.clientes).filter(([,c]) =>
-                  (c.emprestimo || 0) > 0 ||
-                  db.movimentos.some(m => (m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO") && m.cliente === Object.keys(db.clientes).find(k => k === Object.keys(db.clientes).find(kk => db.clientes[kk] === c)))
-                );
-                // simpler: clients with any emprestimo movement
-                const clientesComEmp = Object.entries(db.clientes).filter(([nome, c]) =>
-                  (c.emprestimo || 0) > 0 || db.movimentos.some(m => (m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO") && m.cliente===nome)
-                );
-                const totalEmp = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
+                // Apenas clientes com empréstimo ACTIVO (> 0)
+                const clientesComEmp = Object.entries(db.clientes).filter(([, c]) => (c.emprestimo || 0) > 0);
+                const totalEmp = clientesComEmp.reduce((s, [, c]) => s + (c.emprestimo || 0), 0);
                 return (
                   <>
-                    {totalEmp > 0 && (
+                    {totalEmp > 0 ? (
                       <div style={{padding:"12px 16px 8px", borderBottom:"1px solid #111", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
                         <span style={{fontFamily:GTA, fontSize:12, color:"#444", letterSpacing:2}}>TOTAL EM DÍVIDA</span>
                         <span style={{fontFamily:GTA, fontSize:20, color:"#cc44ff"}}>-{totalEmp}€</span>
                       </div>
+                    ) : (
+                      <div style={{padding:"20px 16px 12px", borderBottom:"1px solid #111", display:"flex", alignItems:"center", gap:10}}>
+                        <span style={{fontSize:22}}>✅</span>
+                        <span style={{fontFamily:GTA, fontSize:14, color:"#2a2a2a", letterSpacing:2}}>TUDO LIQUIDADO</span>
+                      </div>
                     )}
                     {clientesComEmp.length === 0 && (
-                      <div style={{padding:"28px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>SEM EMPRÉSTIMOS</div>
+                      <div style={{padding:"20px 16px", fontFamily:GTA, color:"#1e1e1e", fontSize:14, letterSpacing:2}}>SEM EMPRÉSTIMOS ACTIVOS</div>
                     )}
                     {clientesComEmp.map(([nome, c]) => (
-                      <div key={nome} style={{...S.clienteRow, borderLeft: (c.emprestimo||0)>0 ? "3px solid #cc44ff" : "3px solid #222"}}>
+                      <div key={nome} style={{...S.clienteRow, borderLeft:"3px solid #cc44ff"}}>
                         <span style={S.clienteNome}>{nome}</span>
-                        {(c.emprestimo||0) > 0 && <span style={{...S.divida, color:"#cc44ff"}}>-{c.emprestimo}€</span>}
-                        {(c.emprestimo||0) > 0 && (
-                          <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
-                            onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("PAGAR_EMPRESTIMO"); }}>
-                            RECEBER
-                          </button>
-                        )}
+                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.emprestimo}€</span>
+                        <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
+                          onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("PAGAR_EMPRESTIMO"); }}>
+                          RECEBER
+                        </button>
                       </div>
                     ))}
                     <button style={{...S.menuBtn, marginTop:16}} onClick={() => { playSound("select"); goto("EMPRESTIMO_CLIENTE"); }}>
