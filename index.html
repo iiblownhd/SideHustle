@@ -83,6 +83,8 @@
         "4X":   { stock: 3, preco: 40,  tipo: "FIXO" },
         "MEIA": { stock: 0, preco: undefined, tipo: "VOLATIL" },
         "PEÇA": { stock: 0, preco: undefined, tipo: "VOLATIL" },
+        "1/4":  { stock: 0, preco: undefined, tipo: "VOLATIL" },
+        "1/8":  { stock: 0, preco: undefined, tipo: "VOLATIL" },
       },
       movimentos: [],
     };
@@ -218,6 +220,8 @@
       "4X":   { emoji:"💊", label:"× 40" },
       "MEIA": { emoji:"🧦", label:"MEIA" },
       "PEÇA": { emoji:"🧩", label:"PEÇA" },
+      "1/4":  { emoji:"🔹", label:"1/4" },
+      "1/8":  { emoji:"🔸", label:"1/8" },
     };
 
     /* ---- CONFIRM MODAL ---- */
@@ -356,6 +360,139 @@
       );
     }
 
+    /* ---- NOVO PRODUTO WIZARD ---- */
+    const EMOJI_SUGESTOES = ["💊","🧦","🧩","🔹","🔸","🌿","❄️","🔥","⚡","💎","🍀","🎯","📦","🧪","🌙","💰","🎲","🔑","🍃","💧"];
+
+    function NovoProdutoScreen({ onConfirm, onBack }) {
+      const [step, setStep]   = useState("nome");   // nome → simbolo → tipo → preco
+      const [nome, setNome]   = useState("");
+      const [simbolo, setSimbolo] = useState("");
+      const [tipo, setTipo]   = useState(null);
+      const [precoStr, setPrecoStr] = useState("");
+
+      const confirmarNome = () => {
+        if (!nome.trim()) return;
+        setStep("simbolo");
+      };
+
+      const confirmarSimbolo = (s) => {
+        setSimbolo(s);
+        setStep("tipo");
+      };
+
+      const confirmarTipo = (t) => {
+        setTipo(t);
+        if (t === "VOLATIL") {
+          onConfirm({ nome: nome.trim().toUpperCase(), simbolo, tipo: "VOLATIL", preco: undefined });
+        } else {
+          setStep("preco");
+        }
+      };
+
+      const confirmarPreco = () => {
+        const p = Number(precoStr);
+        if (p <= 0) return;
+        onConfirm({ nome: nome.trim().toUpperCase(), simbolo, tipo: "FIXO", preco: p });
+      };
+
+      if (step === "nome") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>NOME DO PRODUTO</span>
+            <input autoFocus style={{...S.textInput, textTransform:"uppercase"}}
+              value={nome} onChange={e => setNome(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"&&nome.trim()){playSound("confirm");confirmarNome();} }}
+              placeholder="EX: 3X, GANZA, FULL..." />
+          </div>
+          <button style={{...S.confirmBtn, opacity: nome.trim() ? 1 : 0.3}}
+            onClick={() => { if(nome.trim()){playSound("confirm");confirmarNome();} }}>
+            ✓ SEGUINTE
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); onBack(); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "simbolo") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>SÍMBOLO — {nome.trim().toUpperCase()}</span>
+            <input style={{...S.textInput, fontSize:28}}
+              value={simbolo} onChange={e => setSimbolo(e.target.value.slice(0,4))}
+              onKeyDown={e => { if(e.key==="Enter"&&simbolo.trim()){playSound("confirm");confirmarSimbolo(simbolo.trim());} }}
+              placeholder="EMOJI OU TEXTO..." />
+          </div>
+          {/* Sugestões de emoji */}
+          <div style={{display:"flex", flexWrap:"wrap", gap:6, padding:"12px 16px 0"}}>
+            {EMOJI_SUGESTOES.map(e => (
+              <button key={e} style={{
+                padding:"8px 10px", background: simbolo===e ? "#1a1500" : "#0a0a0a",
+                border: `1px solid ${simbolo===e ? "#f5c800" : "#222"}`,
+                fontSize:22, cursor:"pointer", borderRadius:2,
+              }} onClick={() => { playSound("hover"); setSimbolo(e); }}>
+                {e}
+              </button>
+            ))}
+          </div>
+          <button style={{...S.confirmBtn, marginTop:16, opacity: simbolo.trim() ? 1 : 0.3}}
+            onClick={() => { if(simbolo.trim()){playSound("confirm");confirmarSimbolo(simbolo.trim());} }}>
+            ✓ SEGUINTE
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("nome"); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "tipo") return (
+        <>
+          <div style={{padding:"20px 16px 8px"}}>
+            <div style={{fontFamily:GTA, fontSize:12, color:"#444", letterSpacing:2, marginBottom:16}}>
+              TIPO DE PRODUTO — {simbolo} {nome.trim().toUpperCase()}
+            </div>
+            <div style={{display:"flex", gap:10}}>
+              <button style={{
+                flex:1, padding:"22px 0",
+                background:"#0a0a0a", border:"2px solid #f5c800", borderLeft:"4px solid #f5c800",
+                color:"#f5c800", fontFamily:GTA, fontSize:17, letterSpacing:2, cursor:"pointer",
+              }} onClick={() => { playSound("select"); confirmarTipo("FIXO"); }}>
+                <div style={{fontSize:24, marginBottom:6}}>📌</div>
+                FIXO
+                <div style={{fontSize:11, color:"#555", marginTop:4, letterSpacing:1}}>PREÇO E STOCK DEFINIDOS</div>
+              </button>
+              <button style={{
+                flex:1, padding:"22px 0",
+                background:"#0a0a0a", border:"2px solid #00aaff", borderLeft:"4px solid #00aaff",
+                color:"#00aaff", fontFamily:GTA, fontSize:17, letterSpacing:2, cursor:"pointer",
+              }} onClick={() => { playSound("select"); confirmarTipo("VOLATIL"); }}>
+                <div style={{fontSize:24, marginBottom:6}}>🌊</div>
+                VOLÁTIL
+                <div style={{fontSize:11, color:"#555", marginTop:4, letterSpacing:1}}>PREÇO DEFINIDO NA VENDA</div>
+              </button>
+            </div>
+          </div>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("simbolo"); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "preco") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>PREÇO POR UNIDADE — {simbolo} {nome.trim().toUpperCase()}</span>
+            <input autoFocus style={{...S.textInput, fontSize:28}}
+              type="number" inputMode="decimal"
+              value={precoStr} onChange={e => setPrecoStr(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"){playSound("confirm");confirmarPreco();} }}
+              placeholder="0" />
+          </div>
+          <button style={{...S.confirmBtn, opacity: Number(precoStr) > 0 ? 1 : 0.3}}
+            onClick={() => { if(Number(precoStr)>0){playSound("confirm");confirmarPreco();} }}>
+            ✓ CRIAR PRODUTO
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("tipo"); }}>← VOLTAR</button>
+        </>
+      );
+
+      return null;
+    }
+
     /* ---- MAIN APP ---- */
     function App() {
       const [db, setDb] = useState(() => {
@@ -373,6 +510,13 @@
       const [valorVolatil, setValorVolatil]         = useState(0);
       const [empClienteSel, setEmpClienteSel]       = useState(null);
       const [empValor, setEmpValor]                 = useState(0);
+      const [prodDisplayExtra, setProdDisplayExtra] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sh_display") || "{}"); } catch { return {}; }
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem("sh_display", JSON.stringify(prodDisplayExtra)); } catch {}
+      }, [prodDisplayExtra]);
 
       useEffect(() => { _muted = muted; }, [muted]);
       useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} }, [db]);
@@ -453,7 +597,16 @@
         });
       };
 
-      /* EMPRÉSTIMOS */
+      const criarProduto = ({ nome, simbolo, tipo, preco }) => {
+        if (!nome || db.produtos[nome]) return; // já existe
+        setDb(d => ({
+          ...d,
+          produtos: { ...d.produtos, [nome]: { stock: 0, preco, tipo } },
+        }));
+        // Guardar símbolo no PROD_DISPLAY dinâmico (via estado local)
+        setProdDisplayExtra(prev => ({ ...prev, [nome]: { emoji: simbolo, label: nome } }));
+        goto("STOCK");
+      };
       const registarEmprestimo = (descricao) => {
         if (!empClienteSel || empValor <= 0) return;
         setDb(d => ({
@@ -478,7 +631,7 @@
 
       const totalDividas    = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
       const totalEmprestimos = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
-      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER" };
+      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER", NOVO_PRODUTO:"NOVO PRODUTO" };
 
       const [saveFlash, setSaveFlash] = useState(false);
 
@@ -809,7 +962,7 @@
               {screen==="STOCK" && <>
                 <div style={S.stockGrid}>
                   {Object.entries(db.produtos).map(([n, p]) => {
-                    const disp = PROD_DISPLAY[n] || { emoji:"📦", label:n };
+                    const disp = prodDisplayExtra[n] || PROD_DISPLAY[n] || { emoji:"📦", label:n };
                     return (
                       <div key={n} style={{...S.stockCard, borderColor:"#111"}}>
                         <div style={{fontSize:28, lineHeight:1}}>{disp.emoji}</div>
@@ -826,7 +979,10 @@
                     );
                   })}
                 </div>
-                <button style={{...S.dangerBtn,marginTop:14}} onClick={() => { playSound("back"); ask({ message:"RESET STOCK?", sub:"Todas as quantidades vão a zero.", confirmLabel:"RESET", cancelLabel:"CANCELAR", danger:true, onConfirm:resetStock }); }}>
+                <button style={{...S.menuBtn, marginTop:14}} onClick={() => { playSound("select"); goto("NOVO_PRODUTO"); }}>
+                  + NOVO PRODUTO
+                </button>
+                <button style={{...S.dangerBtn,marginTop:10}} onClick={() => { playSound("back"); ask({ message:"RESET STOCK?", sub:"Todas as quantidades vão a zero.", confirmLabel:"RESET", cancelLabel:"CANCELAR", danger:true, onConfirm:resetStock }); }}>
                   <span>⚠ RESET STOCK TOTAL</span>
                 </button>
                 <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
@@ -837,6 +993,11 @@
 
               {/* EDIT STOCK */}
               {screen==="EDIT_STOCK_VALUE" && <NumPadInput label={`NOVO STOCK — ${produtoEdit}  (ACTUAL: ${db.produtos[produtoEdit??'']?.stock??0})`} onConfirm={overrideStock} onBack={() => goto("STOCK")} />}
+
+              {/* NOVO PRODUTO */}
+              {screen==="NOVO_PRODUTO" && (
+                <NovoProdutoScreen onConfirm={criarProduto} onBack={() => goto("STOCK")} />
+              )}
 
               {/* MOVIMENTOS */}
               {screen==="MOVIMENTOS" && <>
