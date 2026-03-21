@@ -520,7 +520,7 @@
       /* CLIENTES */
       const criarCliente = (nome) => {
         if (!nome.trim()) return;
-        setDb(d => ({ ...d, clientes: { ...d.clientes, [nome.trim().toUpperCase()]: { divida: 0, emprestimo: 0 } } }));
+        setDb(d => ({ ...d, clientes: { ...d.clientes, [nome.trim().toUpperCase()]: { divida: 0 } } }));
         goto("CLIENTES");
       };
       const pagar = (valor) => {
@@ -603,26 +603,17 @@
         if (!empClienteSel || empValor <= 0) return;
         setDb(d => ({
           ...d,
-          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], emprestimo: (d.clientes[empClienteSel].emprestimo || 0) + empValor } },
+          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], divida: (d.clientes[empClienteSel].divida || 0) + empValor } },
           movimentos: [{ tipo:"EMPRESTIMO", cliente:empClienteSel, valor:empValor, descricao, ts:Date.now() }, ...d.movimentos],
         }));
         goto("EMPRESTIMOS");
       };
 
-      const pagarEmprestimo = (valor) => {
-        if (!empClienteSel) return;
-        const emp = db.clientes[empClienteSel].emprestimo || 0;
-        if (valor <= 0 || valor > emp) return;
-        setDb(d => ({
-          ...d,
-          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], emprestimo: d.clientes[empClienteSel].emprestimo - valor } },
-          movimentos: [{ tipo:"PAGAMENTO_EMPRESTIMO", cliente:empClienteSel, valor, ts:Date.now() }, ...d.movimentos],
-        }));
-        goto("EMPRESTIMOS");
-      };
-
-      const totalDividas    = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
-      const totalEmprestimos = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
+      const totalDividas     = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
+      // Total emprestado ainda por receber = soma dos EMPRESTIMO - soma dos PAGAMENTO_EMPRESTIMO
+      const totalEmprestimos = db.movimentos
+        .filter(m => m.tipo==="EMPRESTIMO" || m.tipo==="PAGAMENTO_EMPRESTIMO")
+        .reduce((s,m) => s + (m.tipo==="EMPRESTIMO" ? m.valor : -m.valor), 0);
       const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER", NOVO_PRODUTO:"NOVO PRODUTO" };
 
       const [saveFlash, setSaveFlash] = useState(false);
@@ -843,14 +834,16 @@
 
               {/* EMPRESTIMOS */}
               {screen==="EMPRESTIMOS" && (() => {
-                // Apenas clientes com empréstimo ACTIVO (> 0)
-                const clientesComEmp = Object.entries(db.clientes).filter(([, c]) => (c.emprestimo || 0) > 0);
-                const totalEmp = clientesComEmp.reduce((s, [, c]) => s + (c.emprestimo || 0), 0);
+                // Clientes com pelo menos um movimento de empréstimo e dívida activa
+                const clientesComEmp = Object.entries(db.clientes).filter(([nome, c]) =>
+                  db.movimentos.some(m => m.tipo==="EMPRESTIMO" && m.cliente===nome) && (c.divida||0) > 0
+                );
+                const totalEmp = Math.max(0, totalEmprestimos);
                 return (
                   <>
                     {totalEmp > 0 ? (
                       <div style={{padding:"12px 16px 8px", borderBottom:"1px solid #111", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-                        <span style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>TOTAL EM DÍVIDA</span>
+                        <span style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>TOTAL EMPRESTADO</span>
                         <span style={{fontFamily:GTA, fontSize:20, color:"#cc44ff"}}>-{totalEmp}€</span>
                       </div>
                     ) : (
@@ -865,9 +858,9 @@
                     {clientesComEmp.map(([nome, c]) => (
                       <div key={nome} style={{...S.clienteRow, borderLeft:"3px solid #cc44ff"}}>
                         <span style={S.clienteNome}>{nome}</span>
-                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.emprestimo}€</span>
+                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.divida}€</span>
                         <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
-                          onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("PAGAR_EMPRESTIMO"); }}>
+                          onClick={() => { playSound("select"); setClientePagamento(nome); goto("PAGAMENTO"); }}>
                           RECEBER
                         </button>
                       </div>
@@ -889,7 +882,7 @@
                 {Object.entries(db.clientes).map(([nome, c]) => (
                   <div key={nome} style={S.produtoRow} onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("EMPRESTIMO_VALOR"); }}>
                     <span style={S.produtoNome}>{nome}</span>
-                    {(c.emprestimo||0) > 0 && <span style={{fontFamily:GTA, fontSize:13, color:"#cc44ff"}}>-{c.emprestimo}€</span>}
+                    {(c.divida||0) > 0 && <span style={{fontFamily:GTA, fontSize:13, color:"#ff3300"}}>-{c.divida}€</span>}
                   </div>
                 ))}
                 <button style={S.backBtn} onClick={() => { playSound("back"); goto("EMPRESTIMOS"); }}>← VOLTAR</button>
@@ -911,16 +904,6 @@
                   label={`DESCRIÇÃO — ${empClienteSel}  ·  ${empValor}€`}
                   onConfirm={registarEmprestimo}
                   onBack={() => goto("EMPRESTIMO_VALOR")}
-                />
-              )}
-
-              {/* PAGAR EMPRÉSTIMO */}
-              {screen==="PAGAR_EMPRESTIMO" && empClienteSel && (
-                <NumPadInput
-                  decimals
-                  label={`RECEBER DE ${empClienteSel}  ·  EM DÍVIDA: ${db.clientes[empClienteSel]?.emprestimo || 0}€`}
-                  onConfirm={pagarEmprestimo}
-                  onBack={() => goto("EMPRESTIMOS")}
                 />
               )}
 
