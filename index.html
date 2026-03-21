@@ -408,24 +408,34 @@
         <>
           <div style={S.inputWrap}>
             <span style={S.inputLabel}>SÍMBOLO — {nome.trim().toUpperCase()}</span>
-            <input style={{...S.textInput, fontSize:28}}
-              value={simbolo} onChange={e => setSimbolo(e.target.value.slice(0,4))}
-              onKeyDown={e => { if(e.key==="Enter"&&simbolo.trim()){playSound("confirm");confirmarSimbolo(simbolo.trim());} }}
-              placeholder="EMOJI OU TEXTO..." />
+            <div style={{...S.inputDisplay, fontSize:32, letterSpacing:4, minHeight:64}}>
+              {simbolo || <span style={{color:"#222", fontSize:20}}>toca nos emojis ou escreve</span>}
+            </div>
           </div>
-          {/* Sugestões de emoji */}
+          {/* Grid de emojis — toque adiciona/remove */}
           <div style={{display:"flex", flexWrap:"wrap", gap:6, padding:"12px 16px 0"}}>
-            {EMOJI_SUGESTOES.map(e => (
-              <button key={e} style={{
-                padding:"8px 10px", background: simbolo===e ? "#1a1500" : "#0a0a0a",
-                border: `1px solid ${simbolo===e ? "#f5c800" : "#222"}`,
-                fontSize:22, cursor:"pointer", borderRadius:2,
-              }} onClick={() => { playSound("hover"); setSimbolo(e); }}>
-                {e}
-              </button>
-            ))}
+            {EMOJI_SUGESTOES.map(e => {
+              const selected = simbolo.includes(e);
+              return (
+                <button key={e} style={{
+                  padding:"8px 10px", background: selected ? "#1a1500" : "#0a0a0a",
+                  border: `1px solid ${selected ? "#f5c800" : "#222"}`,
+                  fontSize:22, cursor:"pointer", borderRadius:2,
+                }} onClick={() => {
+                  playSound("hover");
+                  setSimbolo(prev => selected ? prev.replace(e,"") : (prev+e).slice(0,6));
+                }}>{e}</button>
+              );
+            })}
           </div>
-          <button style={{...S.confirmBtn, marginTop:16, opacity: simbolo.trim() ? 1 : 0.3}}
+          {/* Input manual para texto */}
+          <div style={{padding:"10px 16px 0"}}>
+            <input style={{...S.textInput, fontSize:18}}
+              value={simbolo}
+              onChange={e => setSimbolo(e.target.value.slice(0,6))}
+              placeholder="ou escreve texto (máx 6 chars)..." />
+          </div>
+          <button style={{...S.confirmBtn, marginTop:12, opacity: simbolo.trim() ? 1 : 0.3}}
             onClick={() => { if(simbolo.trim()){playSound("confirm");confirmarSimbolo(simbolo.trim());} }}>
             ✓ SEGUINTE
           </button>
@@ -502,6 +512,21 @@
       const [valorVolatil, setValorVolatil]         = useState(0);
       const [empClienteSel, setEmpClienteSel]       = useState(null);
       const [empValor, setEmpValor]                 = useState(0);
+      const [pagarOrigem, setPagarOrigem]           = useState("CLIENTES");
+      const [pagarValorPendente, setPagarValorPendente] = useState(0);
+
+      const pagar = (metodo) => {
+        if (!clientePagamento || pagarValorPendente <= 0) return;
+        const divida = db.clientes[clientePagamento].divida;
+        if (pagarValorPendente > divida) return;
+        const tipo = pagarOrigem === "EMPRESTIMOS" ? "PAGAMENTO_EMPRESTIMO" : "PAGAMENTO";
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [clientePagamento]: { divida: d.clientes[clientePagamento].divida - pagarValorPendente } },
+          movimentos: [{ tipo, cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES");
+      };
       const [prodDisplayExtra, setProdDisplayExtra] = useState(() => {
         try { return JSON.parse(localStorage.getItem("sh_display") || "{}"); } catch { return {}; }
       });
@@ -527,8 +552,14 @@
         if (!clientePagamento) return;
         const divida = db.clientes[clientePagamento].divida;
         if (valor <= 0 || valor > divida) return;
-        setDb(d => ({ ...d, clientes: { ...d.clientes, [clientePagamento]: { divida: d.clientes[clientePagamento].divida - valor } }, movimentos: [{ tipo:"PAGAMENTO", cliente:clientePagamento, valor, ts:Date.now() }, ...d.movimentos] }));
-        goto("CLIENTES");
+        // Se vem da tela de empréstimos, regista como PAGAMENTO_EMPRESTIMO para o contador separado
+        const tipo = pagarOrigem === "EMPRESTIMOS" ? "PAGAMENTO_EMPRESTIMO" : "PAGAMENTO";
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [clientePagamento]: { divida: d.clientes[clientePagamento].divida - valor } },
+          movimentos: [{ tipo, cliente:clientePagamento, valor, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES");
       };
       const eliminarCliente = (nome) => {
         setDb(d => { const novos = { ...d.clientes }; delete novos[nome]; return { ...d, clientes: novos }; });
@@ -599,6 +630,11 @@
         setProdDisplayExtra(prev => ({ ...prev, [nome]: { emoji: simbolo, label: nome } }));
         goto("STOCK");
       };
+
+      const eliminarProduto = (nome) => {
+        setDb(d => { const p = { ...d.produtos }; delete p[nome]; return { ...d, produtos: p }; });
+        setProdDisplayExtra(prev => { const n = { ...prev }; delete n[nome]; return n; });
+      };
       const registarEmprestimo = (descricao) => {
         if (!empClienteSel || empValor <= 0) return;
         setDb(d => ({
@@ -620,7 +656,7 @@
         .reduce((s,m)=>s+(m.tipo==="EMPRESTIMO"?m.valor:-m.valor),0));
 
       const totalDividas = Object.values(db.clientes).reduce((s,c)=>s+(c.divida||0),0);
-      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", PAGAR_EMPRESTIMO:"RECEBER", NOVO_PRODUTO:"NOVO PRODUTO" };
+      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", METODO_PAGAMENTO:"MÉTODO", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", NOVO_PRODUTO:"NOVO PRODUTO" };
 
       const [saveFlash, setSaveFlash] = useState(false);
 
@@ -783,7 +819,7 @@
                     {c.divida > 0 && <span style={S.divida}>-{c.divida}€</span>}
                     <button style={S.smallBtn} onClick={() => { playSound("select"); setClienteVenda(nome); goto("VENDA_PRODUTOS"); }}>VENDER</button>
                     <button style={c.divida>0 ? S.smallBtnGreen : S.smallBtnOff} disabled={!c.divida}
-                      onClick={() => { playSound("select"); setClientePagamento(nome); goto("PAGAMENTO"); }}>PAGAR</button>
+                      onClick={() => { playSound("select"); setPagarOrigem("CLIENTES"); setClientePagamento(nome); goto("PAGAMENTO"); }}>PAGAR</button>
                   </div>
                 ))}
                 <button style={S.menuBtn} onClick={() => { playSound("select"); goto("NOVO_CLIENTE"); }}>+ NOVO CLIENTE</button>
@@ -812,7 +848,7 @@
                       <div style={S.fichaActions}>
                         <button style={S.fichaBtn} onClick={() => { playSound("select"); setClienteVenda(fichaCliente); goto("VENDA_PRODUTOS"); }}>VENDER</button>
                         <button style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#aaa",cursor:"not-allowed"}} disabled={!c.divida}
-                          onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>PAGAR</button>
+                          onClick={() => { playSound("select"); setPagarOrigem("CLIENTES"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>PAGAR</button>
                         <button style={S.fichaBtnRed} onClick={() => {
                           playSound("back");
                           if (c.divida > 0) { ask({ message:"LIQUIDA A DÍVIDA PRIMEIRO", sub:`${fichaCliente} tem -${c.divida}€ em aberto.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} }); return; }
@@ -824,7 +860,9 @@
                     {movs.length === 0 && <div style={S.fichaEmpty}>SEM MOVIMENTOS</div>}
                     {movs.map(m => {
                       const cor = m.tipo==="VENDA" ? "#f5c800" : "#00cc44";
-                      const detalhe = m.tipo==="VENDA" ? `${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€` : `+${m.valor}€ recebido`;
+                      const detalhe = m.tipo==="VENDA"
+                        ? `${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`
+                        : `+${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
                       return (
                         <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
                           <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="VENDA"?"💰":"✅"}  {m.tipo}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
@@ -866,7 +904,7 @@
                         <span style={S.clienteNome}>{nome}</span>
                         <span style={{...S.divida, color:"#cc44ff"}}>-{c.divida}€</span>
                         <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
-                          onClick={() => { playSound("select"); setClientePagamento(nome); goto("PAGAMENTO"); }}>
+                          onClick={() => { playSound("select"); setPagarOrigem("EMPRESTIMOS"); setClientePagamento(nome); goto("PAGAMENTO"); }}>
                           RECEBER
                         </button>
                       </div>
@@ -913,20 +951,66 @@
                 />
               )}
 
-              {/* PAGAMENTO */}
-              {screen==="PAGAMENTO" && clientePagamento && <NumPadInput decimals label={`${clientePagamento} · DÍVIDA: ${db.clientes[clientePagamento].divida}€`} onConfirm={pagar} onBack={() => goto("CLIENTES")} />}
+              {/* PAGAMENTO — introduzir valor */}
+              {screen==="PAGAMENTO" && clientePagamento && (
+                <NumPadInput decimals
+                  label={`${clientePagamento} · DÍVIDA: ${db.clientes[clientePagamento].divida}€`}
+                  onConfirm={(v) => {
+                    if (v > db.clientes[clientePagamento].divida) return;
+                    setPagarValorPendente(v);
+                    goto("METODO_PAGAMENTO");
+                  }}
+                  onBack={() => goto(pagarOrigem === "EMPRESTIMOS" ? "EMPRESTIMOS" : "CLIENTES")}
+                />
+              )}
+
+              {/* METODO PAGAMENTO */}
+              {screen==="METODO_PAGAMENTO" && clientePagamento && (
+                <>
+                  <div style={{padding:"16px 16px 6px", fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>
+                    {clientePagamento}  ·  {pagarValorPendente}€
+                  </div>
+                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>
+                    COMO RECEBESTE?
+                  </div>
+                  {[
+                    { id:"DINHEIRO",      icon:"💵", label:"DINHEIRO" },
+                    { id:"MBWAY",         icon:"📱", label:"MBWAY" },
+                    { id:"TRANSFERÊNCIA", icon:"🏦", label:"TRANSFERÊNCIA" },
+                    { id:"OUTRO",         icon:"💳", label:"OUTRO" },
+                  ].map(m => (
+                    <button key={m.id} style={{
+                      display:"flex", alignItems:"center", gap:14,
+                      width:"calc(100% - 32px)", margin:"10px 16px 0",
+                      padding:"16px 18px",
+                      background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800",
+                      color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer",
+                    }} onClick={() => { playSound("confirm"); pagar(m.id); }}>
+                      <span style={{fontSize:26}}>{m.icon}</span>
+                      {m.label}
+                    </button>
+                  ))}
+                  <button style={S.backBtn} onClick={() => { playSound("back"); goto("PAGAMENTO"); }}>← VOLTAR</button>
+                </>
+              )}
 
               {/* VENDA PRODUTOS */}
               {screen==="VENDA_PRODUTOS" && <>
-                {Object.entries(db.produtos).map(([p, prod]) => (
-                  <div key={p} style={S.produtoRow} onClick={() => { playSound("select"); escolherProduto(p); }}>
-                    <div>
-                      <div style={S.produtoNome}>{p}</div>
-                      {prod.preco != null && <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",marginTop:2}}>{prod.preco}€ / UNID</div>}
+                {Object.entries(db.produtos).map(([p, prod]) => {
+                  const disp = prodDisplayExtra[p] || PROD_DISPLAY[p] || { emoji:"📦", label:p };
+                  return (
+                    <div key={p} style={S.produtoRow} onClick={() => { playSound("select"); escolherProduto(p); }}>
+                      <div style={{display:"flex", alignItems:"center", gap:12}}>
+                        <span style={{fontSize:26, lineHeight:1}}>{disp.emoji}</span>
+                        <div>
+                          <div style={S.produtoNome}>{p}</div>
+                          {prod.preco != null && <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",marginTop:2}}>{prod.preco}€ / UNID</div>}
+                        </div>
+                      </div>
+                      {prod.tipo==="FIXO" ? <span style={prod.stock===0 ? S.badgeRed : S.badge}>STOCK {prod.stock}</span> : <span style={S.badge}>VOLATIL</span>}
                     </div>
-                    {prod.tipo==="FIXO" ? <span style={prod.stock===0 ? S.badgeRed : S.badge}>STOCK {prod.stock}</span> : <span style={S.badge}>VOLATIL</span>}
-                  </div>
-                ))}
+                  );
+                })}
                 <button style={S.backBtn} onClick={() => { playSound("back"); goto("CLIENTES"); }}>← VOLTAR</button>
               </>}
 
@@ -960,6 +1044,10 @@
                             <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>
                             <button style={S.stockBtnOrange} onClick={() => { playSound("select"); setProdutoEdit(n); goto("EDIT_STOCK_VALUE"); }}>EDIT</button>
                           </> : <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>}
+                          <button style={{...S.stockBtn, borderColor:"#330000", color:"#aa2200", flex:"0 0 auto", padding:"7px 10px"}}
+                            onClick={() => ask({ message:`APAGAR ${n}?`, sub:"Remove o produto permanentemente.", confirmLabel:"APAGAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarProduto(n) })}>
+                            🗑
+                          </button>
                         </div>
                       </div>
                     );
@@ -992,12 +1080,12 @@
                   const cor = MOV_COLOR[m.tipo] ?? "#f5c800";
                   let detalhe = "";
                   if(m.tipo==="VENDA")               detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`;
-                  if(m.tipo==="PAGAMENTO")            detalhe=`${m.cliente}  ·  +${m.valor}€ recebido`;
+                  if(m.tipo==="PAGAMENTO")            detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
                   if(m.tipo==="ADD_STOCK")            detalhe=`${m.produto}  ·  +${m.unidades} unid`;
                   if(m.tipo==="OVERRIDE_STOCK")       detalhe=`${m.produto}  ·  ${m.antes} → ${m.depois} unid`;
                   if(m.tipo==="RESET_STOCK")          detalhe=`stock total resetado`;
                   if(m.tipo==="EMPRESTIMO")           detalhe=`${m.cliente}  ·  ${m.valor}€  ·  ${m.descricao||'—'}`;
-                  if(m.tipo==="PAGAMENTO_EMPRESTIMO") detalhe=`${m.cliente}  ·  +${m.valor}€ recebido`;
+                  if(m.tipo==="PAGAMENTO_EMPRESTIMO") detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
                   return (
                     <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
                       <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{MOV_ICON[m.tipo]}  {m.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
