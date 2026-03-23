@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Side Hustle" />
+  <meta name="theme-color" content="#000000" />
+  <title>Side Hustle</title>
+
+  <!-- Manifest injectado via JS para funcionar em single-file -->
+  <script>
+    (function() {
+      // Ícone 192x192 preto com letra S dourada
+      const canvas = document.createElement('canvas');
+      canvas.width = 192; canvas.height = 192;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,192,192);
+      ctx.fillStyle = '#f5c800';
+      ctx.font = 'bold 130px Impact, Arial Black, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('$', 96, 100);
+      const icon = canvas.toDataURL('image/png');
+
+      const manifest = {
+        name: 'Side Hustle',
+        short_name: 'Side Hustle',
+        start_url: window.location.href,
+        display: 'standalone',
+        background_color: '#000000',
+        theme_color: '#000000',
+        orientation: 'portrait',
+        icons: [
+          { src: icon, sizes: '192x192', type: 'image/png' },
+          { src: icon, sizes: '512x512', type: 'image/png' }
+        ]
+      };
+      const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement('link');
+      link.rel = 'manifest'; link.href = url;
+      document.head.appendChild(link);
+    })();
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #000; height: 100%; overscroll-behavior: none; }
+    body { -webkit-tap-highlight-color: transparent; user-select: none; }
+    #root { min-height: 100vh; }
+    button { -webkit-tap-highlight-color: transparent; }
+    button:active { filter: brightness(1.4); transform: scale(0.97); }
+    ::-webkit-scrollbar { width: 2px; }
+    ::-webkit-scrollbar-thumb { background: #f5c800; }
+    input::placeholder { color: #222; }
+    input { -webkit-user-select: text; user-select: text; }
+  </style>
+
+  <!-- React + ReactDOM + Babel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const KEY = "sidehustle_v45";
+
+    const sampleDB = {
+      clientes: {},
+      produtos: {
+        "+++": { stock: 0, preco: undefined, tipo: "VOLATIL", semStock: true },
+      },
+      movimentos: [],
+      anulados: [],
+    };
+
+    const GTA  = "'Bebas Neue', 'Impact', 'Arial Black', sans-serif";
+    const MONO = "'Courier New', monospace";
+
+    /* ---- SOUND ---- */
+    let audioCtx = null;
+    let _muted = false;
+    const getCtx = () => {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    };
+    const playSound = (type) => {
+      if (_muted) return;
+      try {
+        const ctx = getCtx();
+        const g = ctx.createGain();
+        g.connect(ctx.destination);
+        if (type === "hover") {
+          const o = ctx.createOscillator(); o.type = "square";
+          o.frequency.setValueAtTime(1200, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.06);
+          g.gain.setValueAtTime(0.07, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+          o.connect(g); o.start(); o.stop(ctx.currentTime + 0.07);
+        } else if (type === "select") {
+          [0, 0.06].forEach((delay, i) => {
+            const o = ctx.createOscillator(); o.type = "square";
+            o.frequency.value = i === 0 ? 800 : 1100;
+            const gn = ctx.createGain();
+            gn.gain.setValueAtTime(0.09, ctx.currentTime + delay);
+            gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.08);
+            o.connect(gn); gn.connect(ctx.destination);
+            o.start(ctx.currentTime + delay); o.stop(ctx.currentTime + delay + 0.08);
+          });
+        } else if (type === "back") {
+          const o = ctx.createOscillator(); o.type = "square";
+          o.frequency.setValueAtTime(900, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
+          g.gain.setValueAtTime(0.08, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+          o.connect(g); o.start(); o.stop(ctx.currentTime + 0.1);
+        } else if (type === "confirm") {
+          [0, 0.07, 0.14].forEach((delay, i) => {
+            const o = ctx.createOscillator(); o.type = "square";
+            o.frequency.value = [700, 900, 1200][i];
+            const gn = ctx.createGain();
+            gn.gain.setValueAtTime(0.08, ctx.currentTime + delay);
+            gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.1);
+            o.connect(gn); gn.connect(ctx.destination);
+            o.start(ctx.currentTime + delay); o.stop(ctx.currentTime + delay + 0.1);
+          });
+        }
+      } catch(_) {}
+    };
+
+    /* ---- STYLES ---- */
+    const S = {
+      root: { background:"#000", minHeight:"100vh", color:"#fff", fontFamily:GTA, position:"relative", overflowX:"hidden" },
+      scanlines: { position:"fixed", top:0, left:0, right:0, bottom:0, background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px)", pointerEvents:"none", zIndex:1 },
+      page: { position:"relative", zIndex:2, maxWidth:480, margin:"0 auto", paddingBottom:80 },
+      header: { background:"#060606", borderBottom:"1px solid #1e1e1e", padding:"0 16px", display:"flex", alignItems:"stretch", justifyContent:"space-between", minHeight:56, position:"relative" },
+      headerAccent: { position:"absolute", bottom:0, left:0, right:0, height:2, background:"linear-gradient(90deg,#f5c800 0%,rgba(245,200,0,0.3) 60%,transparent 100%)" },
+      headerLeft: { display:"flex", flexDirection:"column", justifyContent:"center", gap:1 },
+      headerBrand: { fontFamily:GTA, fontSize:11, letterSpacing:5, color:"#f5c800", opacity:0.6, lineHeight:1 },
+      headerScreen: { fontFamily:GTA, fontSize:22, letterSpacing:2, color:"#fff", lineHeight:1 },
+      headerRight: { display:"flex", alignItems:"center", gap:12 },
+      headerMeta: { fontFamily:GTA, fontSize:13, color:"#aaa", letterSpacing:1, textAlign:"right" },
+      muteBtn: { background:"transparent", border:"1px solid #222", color:"#aaa", fontSize:14, width:32, height:32, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:4, flexShrink:0 },
+      divider: { height:1, background:"linear-gradient(90deg,rgba(245,200,0,0.15),transparent)", marginBottom:2 },
+      menuBtn: { display:"flex", alignItems:"center", justifyContent:"center", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer", gap:10 },
+      dangerBtn: { display:"flex", alignItems:"center", justifyContent:"space-between", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"14px 18px", background:"#080000", border:"1px solid #330000", borderLeft:"3px solid #ff3300", color:"#ff3300", fontFamily:GTA, fontSize:18, letterSpacing:3, cursor:"pointer" },
+      backBtn: { display:"block", width:"calc(100% - 32px)", margin:"16px 16px 0", padding:"12px 18px", background:"transparent", border:"1px solid #1e1e1e", color:"#aaa", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"left" },
+      confirmBtn: { display:"block", width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0d0d00", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer", textAlign:"center" },
+      clienteRow: { display:"flex", alignItems:"center", gap:8, padding:"12px 16px", borderBottom:"1px solid #111" },
+      clienteNome: { fontFamily:GTA, fontSize:19, letterSpacing:1, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
+      divida: { fontFamily:GTA, fontSize:16, color:"#ff3300", whiteSpace:"nowrap" },
+      smallBtn: { padding:"7px 11px", background:"#0a0a0a", border:"1px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", whiteSpace:"nowrap" },
+      smallBtnGreen: { padding:"7px 11px", background:"#000e00", border:"1px solid #00cc44", color:"#00cc44", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", whiteSpace:"nowrap" },
+      smallBtnOff: { padding:"7px 11px", background:"#060606", border:"1px solid #1a1a1a", color:"#aaa", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"not-allowed", whiteSpace:"nowrap" },
+      produtoRow: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"15px 16px", borderBottom:"1px solid #111", cursor:"pointer" },
+      produtoNome: { fontFamily:GTA, fontSize:22, letterSpacing:2 },
+      badge: { fontFamily:GTA, fontSize:12, color:"#f5c800", background:"#0d0d00", border:"1px solid #333", padding:"3px 10px", letterSpacing:1 },
+      badgeRed: { fontFamily:GTA, fontSize:12, color:"#ff3300", background:"#0d0000", border:"1px solid #330000", padding:"3px 10px", letterSpacing:1 },
+      stockGrid: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, padding:"1px", marginTop:2 },
+      stockCard: { background:"#060606", border:"1px solid #111", padding:"14px 12px", display:"flex", flexDirection:"column", gap:5 },
+      stockCardNome: { fontFamily:GTA, fontSize:20, letterSpacing:2 },
+      stockCardQty: { fontFamily:GTA, fontSize:32, color:"#f5c800", lineHeight:1 },
+      stockCardSub: { fontFamily:GTA, fontSize:11, color:"#999", letterSpacing:1 },
+      stockCardActions: { display:"flex", gap:4, marginTop:4 },
+      stockBtn: { flex:1, padding:"7px 0", background:"#0a0a0a", border:"1px solid #333", color:"#f5c800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", textAlign:"center" },
+      stockBtnOrange: { flex:1, padding:"7px 0", background:"#0a0a0a", border:"1px solid #2a1a00", color:"#ff8800", fontFamily:GTA, fontSize:12, letterSpacing:1, cursor:"pointer", textAlign:"center" },
+      inputWrap: { padding:"18px 16px 0" },
+      inputLabel: { fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2, display:"block", marginBottom:8 },
+      inputDisplay: { display:"flex", alignItems:"center", width:"100%", padding:"14px 16px", background:"#060606", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:34, letterSpacing:2, minHeight:64, boxSizing:"border-box" },
+      textInput: { display:"block", width:"100%", padding:"14px 16px", background:"#060606", border:"1px solid #f5c800", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:22, letterSpacing:2, outline:"none", boxSizing:"border-box" },
+      numPad: { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, padding:"10px 16px 0" },
+      numKey: { padding:"18px 0", background:"#080808", border:"1px solid #111", color:"#ccc", fontFamily:GTA, fontSize:24, cursor:"pointer", textAlign:"center" },
+      numKeyBlank: { padding:"18px 0", background:"#000", border:"1px solid #000", cursor:"default" },
+      movCard: { margin:"8px 16px 0", padding:"11px 13px", background:"#050505", borderLeft:"3px solid #f5c800" },
+      movHeader: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 },
+      movTipo: { fontFamily:GTA, fontSize:14, letterSpacing:2 },
+      movTs: { fontFamily:MONO, fontSize:10, color:"#999" },
+      movBody: { fontFamily:MONO, fontSize:11, color:"#aaa", lineHeight:1.6, marginBottom:8 },
+      movFooter: { display:"flex", justifyContent:"flex-end" },
+      undoBtn: { padding:"4px 12px", background:"transparent", border:"1px solid #2a2a2a", color:"#aaa", fontFamily:GTA, fontSize:11, letterSpacing:1, cursor:"pointer" },
+      fichaHero: { padding:"20px 16px 14px", borderBottom:"1px solid #111" },
+      fichaNome: { fontFamily:GTA, fontSize:28, letterSpacing:2, color:"#fff", lineHeight:1 },
+      fichaDivida: { fontFamily:GTA, fontSize:20, color:"#ff3300", marginTop:4 },
+      fichaZero: { fontFamily:GTA, fontSize:14, color:"#aaa", marginTop:4, letterSpacing:2 },
+      fichaActions: { display:"flex", gap:8, marginTop:14 },
+      fichaBtn: { flex:1, padding:"10px 0", background:"#0a0a0a", border:"1px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
+      fichaBtnGreen: { flex:1, padding:"10px 0", background:"#000e00", border:"1px solid #00cc44", color:"#00cc44", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
+      fichaBtnPurple: { flex:1, padding:"10px 0", background:"#0a0010", border:"1px solid #cc44ff", color:"#cc44ff", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
+      fichaBtnRed: { padding:"10px 16px", background:"transparent", border:"1px solid #330000", color:"#550000", fontFamily:GTA, fontSize:14, letterSpacing:2, cursor:"pointer", textAlign:"center" },
+      fichaSection: { fontFamily:GTA, fontSize:11, color:"#999", letterSpacing:3, padding:"14px 16px 6px" },
+      fichaEmpty: { fontFamily:MONO, fontSize:11, color:"#666", padding:"12px 16px", letterSpacing:1 },
+    };
+
+    const fmtTime = (ts) => {
+      const d = new Date(ts);
+      return `${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")} ${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}`;
+    };
+
+    const MOV_COLOR = { VENDA:"#f5c800", PAGAMENTO:"#00cc44", ADD_STOCK:"#00aaff", OVERRIDE_STOCK:"#ff8800", RESET_STOCK:"#ff3300", EMPRESTIMO:"#cc44ff", PAGAMENTO_EMPRESTIMO:"#44ffcc" };
+    const MOV_ICON  = { VENDA:"💰", PAGAMENTO:"✅", ADD_STOCK:"📦", OVERRIDE_STOCK:"✏️", RESET_STOCK:"🔴", EMPRESTIMO:"🤝", PAGAMENTO_EMPRESTIMO:"💸" };
+
+    // Emoji e label de display por produto
+    const PROD_DISPLAY = {
+      "1X":   { emoji:"💊", label:"× 10" },
+      "2X":   { emoji:"💊", label:"× 20" },
+      "4X":   { emoji:"💊", label:"× 40" },
+      "MEIA": { emoji:"🧦", label:"MEIA" },
+      "PEÇA": { emoji:"🧩", label:"PEÇA" },
+      "1/4":  { emoji:"🔹", label:"1/4" },
+      "1/8":  { emoji:"🔸", label:"1/8" },
+      "+++":  { emoji:"✍️", label:"+++" },
+    };
+
+    /* ---- CONFIRM MODAL ---- */
+    function ConfirmModal({ config, onCancel }) {
+      return (
+        <div style={{ position:"fixed", inset:0, zIndex:200, background:"rgba(0,0,0,0.9)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0 24px" }}>
+          <style>{`@keyframes mIn{0%{opacity:0;transform:scale(0.85) translateY(16px)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+          <div style={{ width:"100%", maxWidth:360, animation:"mIn 0.22s cubic-bezier(0.22,1,0.36,1) forwards" }}>
+            <div style={{ fontFamily:GTA, fontSize:"clamp(18px,5.5vw,24px)", color:"#fff", letterSpacing:2, textAlign:"center", lineHeight:1.3, marginBottom: config.sub ? 10 : 28 }}>
+              {config.message}
+            </div>
+            {config.sub && (
+              <div style={{ fontFamily:MONO, fontSize:12, color:"#aaa", textAlign:"center", marginBottom:28, lineHeight:1.5 }}>
+                {config.sub}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:10 }}>
+              <button style={{ flex:1, padding:"18px 0", background:"linear-gradient(135deg,#1a0000,#2a0000)", border:"2px solid #cc0000", color:"#ff3300", fontFamily:GTA, fontSize:18, letterSpacing:3, cursor:"pointer", borderRadius:2 }}
+                onClick={() => { playSound("back"); onCancel(); }}>
+                {config.cancelLabel || "NÃO"}
+              </button>
+              <button style={{ flex:1, padding:"18px 0", background: config.danger ? "linear-gradient(135deg,#0a0010,#12001e)" : "linear-gradient(135deg,#000a1a,#00122a)", border:`2px solid ${config.danger ? "#6600cc" : "#0066cc"}`, color: config.danger ? "#aa44ff" : "#4488ff", fontFamily:GTA, fontSize:18, letterSpacing:3, cursor:"pointer", borderRadius:2 }}
+                onClick={() => { playSound("confirm"); config.onConfirm(); onCancel(); }}>
+                {config.confirmLabel || "SIM"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ---- NUMPAD ---- */
+    function NumPadInput({ label, onConfirm, onBack, decimals }) {
+      const [val, setVal] = useState("");
+      const press = (d) => {
+        if (d === "." && (val.includes(".") || !decimals)) return;
+        setVal(v => (v + d).slice(0, 8));
+      };
+      const del = () => setVal(v => v.slice(0, -1));
+      const confirm = () => { const n = Number(val); if (n > 0) onConfirm(n); };
+      const keys = decimals ? ["1","2","3","4","5","6","7","8","9",".","0","⌫"] : ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+      return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>{label}</span>
+            <div style={S.inputDisplay}>{val ? val : <span style={{color:"#333"}}>0</span>}</div>
+          </div>
+          <div style={S.numPad}>
+            {keys.map((d, i) => (
+              <button key={i} style={d === "" ? S.numKeyBlank : S.numKey}
+                onClick={() => { if(d==="⌫"){playSound("back");del();}else if(d!==""){playSound("hover");press(d);} }}>
+                {d}
+              </button>
+            ))}
+          </div>
+          <button style={{...S.confirmBtn, opacity: val && Number(val) > 0 ? 1 : 0.3}} onClick={() => { playSound("confirm"); confirm(); }}>✓ CONFIRMAR</button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); onBack(); }}>← VOLTAR</button>
+        </>
+      );
+    }
+
+    /* ---- NOVO CLIENTE ---- */
+    function NovoClienteScreen({ onConfirm, onBack }) {
+      const [nome, setNome] = useState("");
+      return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>NOME DO CLIENTE</span>
+            <input autoFocus style={{...S.textInput, textTransform:"uppercase"}}
+              value={nome} onChange={e => setNome(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"&&nome.trim()){playSound("confirm");onConfirm(nome);} }}
+              placeholder="ESCREVE O NOME..." />
+          </div>
+          <button style={{...S.confirmBtn, opacity: nome.trim() ? 1 : 0.3}}
+            onClick={() => { if(nome.trim()){playSound("confirm");onConfirm(nome);} }}>
+            ✓ CRIAR CLIENTE
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); onBack(); }}>← VOLTAR</button>
+        </>
+      );
+    }
+
+    /* ---- SPLASH ---- */
+    function SplashScreen({ onDone }) {
+      const [phase, setPhase] = useState("ninja");
+      useEffect(() => {
+        const t1 = setTimeout(() => setPhase("title"), 1500);
+        const t2 = setTimeout(onDone, 3400);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+      }, []);
+      return (
+        <div style={{ position:"fixed", inset:0, background:"#000", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", zIndex:100, overflow:"hidden" }}>
+          <style>{`
+            @keyframes ninjaIn{0%{opacity:0;transform:scale(0.3) rotate(-20deg)}60%{opacity:1;transform:scale(1.12) rotate(4deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+            @keyframes titleIn{0%{opacity:0;transform:translateY(16px);letter-spacing:12px}100%{opacity:1;transform:translateY(0);letter-spacing:5px}}
+            @keyframes subIn{0%,40%{opacity:0}100%{opacity:1}}
+            @keyframes loadBar{0%{width:0%}100%{width:100%}}
+            @keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+          `}</style>
+          {phase === "ninja" && <>
+            <div style={{ fontSize:"clamp(110px,38vw,190px)", lineHeight:1, animation:"ninjaIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards", userSelect:"none" }}>🥷</div>
+            <div style={{ fontSize:"clamp(44px,14vw,72px)", marginTop:-16, animation:"ninjaIn 0.6s 0.18s cubic-bezier(0.22,1,0.36,1) both", userSelect:"none" }}>🤫</div>
+          </>}
+          {phase === "title" && <>
+            <div style={{ fontFamily:GTA, fontSize:"clamp(48px,14vw,82px)", color:"#f5c800", letterSpacing:5, textAlign:"center", animation:"titleIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards, pulse 2.5s 0.6s ease infinite", lineHeight:1 }}>SIDE HUSTLE</div>
+            <div style={{ fontFamily:GTA, fontSize:11, color:"#aaa", marginTop:10, animation:"subIn 1s ease forwards", letterSpacing:7 }}>GESTÃO DE NEGÓCIO</div>
+            <div style={{ width:"50%", height:1, background:"#111", marginTop:40, overflow:"hidden" }}>
+              <div style={{ height:"100%", background:"linear-gradient(90deg,#f5c800,#fff8cc)", animation:"loadBar 1.8s linear forwards" }} />
+            </div>
+          </>}
+        </div>
+      );
+    }
+
+    /* ---- DESCRICAO INPUT ---- */
+    function DescricaoInput({ label, onConfirm, onBack }) {
+      const [val, setVal] = useState("");
+      return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>{label}</span>
+            <input
+              autoFocus
+              style={{...S.textInput, fontSize:18, textTransform:"uppercase"}}
+              value={val}
+              onChange={e => setVal(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"&&val.trim()){playSound("confirm");onConfirm(val.trim().toUpperCase());} }}
+              placeholder="DESCRIÇÃO (OPCIONAL)..."
+            />
+          </div>
+          <button style={S.confirmBtn} onClick={() => { playSound("confirm"); onConfirm(val.trim().toUpperCase() || "—"); }}>
+            ✓ CONFIRMAR
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); onBack(); }}>← VOLTAR</button>
+        </>
+      );
+    }
+
+    /* ---- NOVO PRODUTO WIZARD ---- */
+    const EMOJI_SUGESTOES = ["💊","🧦","🧩","🔹","🔸","🌿","❄️","🔥","⚡","💎","🍀","🎯","📦","🧪","🌙","💰","🎲","🔑","🍃","💧"];
+
+    function NovoProdutoScreen({ onConfirm, onBack }) {
+      const [step, setStep]   = useState("nome");   // nome → simbolo → tipo → preco
+      const [nome, setNome]   = useState("");
+      const [simbolo, setSimbolo] = useState("");
+      const [tipo, setTipo]   = useState(null);
+      const [precoStr, setPrecoStr] = useState("");
+
+      const confirmarNome = () => {
+        if (!nome.trim()) return;
+        setStep("simbolo");
+      };
+
+      const confirmarSimbolo = (s) => {
+        setSimbolo(s);
+        setStep("tipo");
+      };
+
+      const confirmarTipo = (t) => {
+        setTipo(t);
+        if (t === "VOLATIL") {
+          onConfirm({ nome: nome.trim().toUpperCase(), simbolo, tipo: "VOLATIL", preco: undefined });
+        } else {
+          setStep("preco");
+        }
+      };
+
+      const confirmarPreco = () => {
+        const p = Number(precoStr);
+        if (p <= 0) return;
+        onConfirm({ nome: nome.trim().toUpperCase(), simbolo, tipo: "FIXO", preco: p });
+      };
+
+      if (step === "nome") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>NOME DO PRODUTO</span>
+            <input autoFocus style={{...S.textInput, textTransform:"uppercase"}}
+              value={nome} onChange={e => setNome(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"&&nome.trim()){playSound("confirm");confirmarNome();} }}
+              placeholder="EX: 3X, FULL, EXTRA..." />
+          </div>
+          <button style={{...S.confirmBtn, opacity: nome.trim() ? 1 : 0.3}}
+            onClick={() => { if(nome.trim()){playSound("confirm");confirmarNome();} }}>
+            ✓ SEGUINTE
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); onBack(); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "simbolo") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>SÍMBOLO — {nome.trim().toUpperCase()}</span>
+            <div style={{...S.inputDisplay, fontSize:32, letterSpacing:4, minHeight:64}}>
+              {simbolo || <span style={{color:"#222", fontSize:20}}>toca nos emojis ou escreve</span>}
+            </div>
+          </div>
+          {/* Grid de emojis — toque adiciona/remove */}
+          <div style={{display:"flex", flexWrap:"wrap", gap:6, padding:"12px 16px 0"}}>
+            {EMOJI_SUGESTOES.map(e => {
+              const selected = simbolo.includes(e);
+              return (
+                <button key={e} style={{
+                  padding:"8px 10px", background: selected ? "#1a1500" : "#0a0a0a",
+                  border: `1px solid ${selected ? "#f5c800" : "#222"}`,
+                  fontSize:22, cursor:"pointer", borderRadius:2,
+                }} onClick={() => {
+                  playSound("hover");
+                  setSimbolo(prev => selected ? prev.replace(e,"") : (prev+e).slice(0,6));
+                }}>{e}</button>
+              );
+            })}
+          </div>
+          {/* Input manual para texto */}
+          <div style={{padding:"10px 16px 0"}}>
+            <input style={{...S.textInput, fontSize:18}}
+              value={simbolo}
+              onChange={e => setSimbolo(e.target.value.slice(0,6))}
+              placeholder="ou escreve texto (máx 6 chars)..." />
+          </div>
+          <button style={{...S.confirmBtn, marginTop:12, opacity: simbolo.trim() ? 1 : 0.3}}
+            onClick={() => { if(simbolo.trim()){playSound("confirm");confirmarSimbolo(simbolo.trim());} }}>
+            ✓ SEGUINTE
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("nome"); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "tipo") return (
+        <>
+          <div style={{padding:"20px 16px 8px"}}>
+            <div style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2, marginBottom:16}}>
+              TIPO DE PRODUTO — {simbolo} {nome.trim().toUpperCase()}
+            </div>
+            <div style={{display:"flex", gap:10}}>
+              <button style={{
+                flex:1, padding:"22px 0",
+                background:"#0a0a0a", border:"2px solid #f5c800", borderLeft:"4px solid #f5c800",
+                color:"#f5c800", fontFamily:GTA, fontSize:17, letterSpacing:2, cursor:"pointer",
+              }} onClick={() => { playSound("select"); confirmarTipo("FIXO"); }}>
+                <div style={{fontSize:24, marginBottom:6}}>📌</div>
+                FIXO
+                <div style={{fontSize:11, color:"#aaa", marginTop:4, letterSpacing:1}}>PREÇO E STOCK DEFINIDOS</div>
+              </button>
+              <button style={{
+                flex:1, padding:"22px 0",
+                background:"#0a0a0a", border:"2px solid #00aaff", borderLeft:"4px solid #00aaff",
+                color:"#00aaff", fontFamily:GTA, fontSize:17, letterSpacing:2, cursor:"pointer",
+              }} onClick={() => { playSound("select"); confirmarTipo("VOLATIL"); }}>
+                <div style={{fontSize:24, marginBottom:6}}>🌊</div>
+                VOLÁTIL
+                <div style={{fontSize:11, color:"#aaa", marginTop:4, letterSpacing:1}}>PREÇO DEFINIDO NA VENDA</div>
+              </button>
+            </div>
+          </div>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("simbolo"); }}>← VOLTAR</button>
+        </>
+      );
+
+      if (step === "preco") return (
+        <>
+          <div style={S.inputWrap}>
+            <span style={S.inputLabel}>PREÇO POR UNIDADE — {simbolo} {nome.trim().toUpperCase()}</span>
+            <input autoFocus style={{...S.textInput, fontSize:28}}
+              type="number" inputMode="decimal"
+              value={precoStr} onChange={e => setPrecoStr(e.target.value)}
+              onKeyDown={e => { if(e.key==="Enter"){playSound("confirm");confirmarPreco();} }}
+              placeholder="0" />
+          </div>
+          <button style={{...S.confirmBtn, opacity: Number(precoStr) > 0 ? 1 : 0.3}}
+            onClick={() => { if(Number(precoStr)>0){playSound("confirm");confirmarPreco();} }}>
+            ✓ CRIAR PRODUTO
+          </button>
+          <button style={S.backBtn} onClick={() => { playSound("back"); setStep("tipo"); }}>← VOLTAR</button>
+        </>
+      );
+
+      return null;
+    }
+
+    /* ---- MAIN APP ---- */
+    function App() {
+      const [db, setDb] = useState(() => {
+        try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : sampleDB; } catch { return sampleDB; }
+      });
+      const [screen, setScreen]                     = useState("SPLASH");
+      const [muted, setMuted]                       = useState(false);
+      const [modal, setModal]                       = useState(null);
+      const [clienteVenda, setClienteVenda]         = useState(null);
+      const [clientePagamento, setClientePagamento] = useState(null);
+      const [fichaCliente, setFichaCliente]         = useState(null);
+      const [produtoVenda, setProdutoVenda]         = useState(null);
+      const [produtoStock, setProdutoStock]         = useState(null);
+      const [produtoEdit, setProdutoEdit]           = useState(null);
+      const [valorVolatil, setValorVolatil]         = useState(0);
+      const [empClienteSel, setEmpClienteSel]       = useState(null);
+      const [empValor, setEmpValor]                 = useState(0);
+      const [pagarOrigem, setPagarOrigem]           = useState("CLIENTES");
+      const [pagarValorPendente, setPagarValorPendente] = useState(0);
+      const [prodDisplayExtra, setProdDisplayExtra] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sh_display") || "{}"); } catch { return {}; }
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem("sh_display", JSON.stringify(prodDisplayExtra)); } catch {}
+      }, [prodDisplayExtra]);
+
+      useEffect(() => { _muted = muted; }, [muted]);
+      useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} }, [db]);
+
+      const goto = (s) => setScreen(s);
+      const ask  = (cfg) => setModal(cfg);
+      const closeModal = () => setModal(null);
+
+      /* CLIENTES */
+      const criarCliente = (nome) => {
+        if (!nome.trim()) return;
+        setDb(d => ({ ...d, clientes: { ...d.clientes, [nome.trim().toUpperCase()]: { divida: 0, emprestimo: 0 } } }));
+        goto("CLIENTES");
+      };
+
+      // Pagar dívida de VENDAS
+      const pagar = (metodo) => {
+        if (!clientePagamento || pagarValorPendente <= 0) return;
+        const divida = db.clientes[clientePagamento].divida;
+        if (pagarValorPendente > divida) return;
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [clientePagamento]: { ...d.clientes[clientePagamento], divida: d.clientes[clientePagamento].divida - pagarValorPendente } },
+          movimentos: [{ tipo:"PAGAMENTO", cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto("CLIENTES");
+      };
+
+      // Pagar empréstimo (campo separado)
+      const pagarEmprestimo = (metodo) => {
+        if (!clientePagamento || pagarValorPendente <= 0) return;
+        const emp = db.clientes[clientePagamento].emprestimo || 0;
+        if (pagarValorPendente > emp) return;
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [clientePagamento]: { ...d.clientes[clientePagamento], emprestimo: d.clientes[clientePagamento].emprestimo - pagarValorPendente } },
+          movimentos: [{ tipo:"PAGAMENTO_EMPRESTIMO", cliente:clientePagamento, valor:pagarValorPendente, metodo, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto("EMPRESTIMOS");
+      };
+
+      const eliminarCliente = (nome) => {
+        setDb(d => { const novos = { ...d.clientes }; delete novos[nome]; return { ...d, clientes: novos }; });
+        goto("CLIENTES");
+      };
+
+      /* VENDER */
+      const escolherProduto = (p) => { setProdutoVenda(p); goto(db.produtos[p].tipo === "VOLATIL" ? "VENDA_PRECO" : "VENDA_UNIDADES"); };
+      const confirmarPrecoVolatil = (preco) => { setValorVolatil(preco); goto("VENDA_UNIDADES"); };
+      const vender = (u) => {
+        if (!clienteVenda || !produtoVenda) return;
+        const prod = db.produtos[produtoVenda];
+        const isVolatil = prod.tipo === "VOLATIL";
+        const isSemStock = prod.semStock === true; // produto especial sem stock (ex: +++)
+        // Verificar stock: FIXO e VOLATIL precisam de stock, semStock não
+        if (!isSemStock && prod.stock < u) {
+          ask({ message:"SEM STOCK", sub:`${produtoVenda} não tem ${u} unidades.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} });
+          return;
+        }
+        const preco = isVolatil ? valorVolatil : (prod.preco ?? 0);
+        const valor = preco * u;
+        setDb(d => ({ ...d,
+          // só decrementa stock se não for semStock
+          produtos: isSemStock ? d.produtos : { ...d.produtos, [produtoVenda]: { ...prod, stock: Math.max(0, prod.stock - u) } },
+          clientes: { ...d.clientes, [clienteVenda]: { ...d.clientes[clienteVenda], divida: (d.clientes[clienteVenda].divida||0) + valor } },
+          movimentos: [{ tipo:"VENDA", cliente:clienteVenda, produto:produtoVenda, unidades:u, valor, valorUnit:preco, ts:Date.now() }, ...d.movimentos]
+        }));
+        goto("CLIENTES");
+      };
+
+      /* UNDO */
+      const undoVenda = (mov) => {
+        setDb(d => {
+          const prod = d.produtos[mov.produto];
+          const isSemStock = prod?.semStock === true;
+          const deletedLog = { ...mov, tipo:"VENDA_ANULADA", tsAnulado: Date.now() };
+          return { ...d,
+            // só devolve stock se produto existir e não for semStock
+            produtos: (prod && !isSemStock)
+              ? { ...d.produtos, [mov.produto]: { ...prod, stock: prod.stock + mov.unidades } }
+              : d.produtos,
+            clientes: { ...d.clientes, [mov.cliente]: { ...d.clientes[mov.cliente], divida: Math.max(0, (d.clientes[mov.cliente].divida||0) - mov.valor) } },
+            movimentos: d.movimentos.filter(m => m.ts !== mov.ts),
+            anulados: [deletedLog, ...(d.anulados || [])],
+          };
+        });
+        playSound("back");
+      };
+
+      /* STOCK */
+      const addStock = (u) => {
+        if (!produtoStock) return;
+        setDb(d => ({ ...d, produtos: { ...d.produtos, [produtoStock]: { ...d.produtos[produtoStock], stock: d.produtos[produtoStock].stock + u } }, movimentos: [{ tipo:"ADD_STOCK", produto:produtoStock, unidades:u, ts:Date.now() }, ...d.movimentos] }));
+        goto("STOCK");
+      };
+      const overrideStock = (novo) => {
+        if (!produtoEdit) return;
+        const antes = db.produtos[produtoEdit].stock;
+        setDb(d => ({ ...d, produtos: { ...d.produtos, [produtoEdit]: { ...d.produtos[produtoEdit], stock: novo } }, movimentos: [{ tipo:"OVERRIDE_STOCK", produto:produtoEdit, antes, depois:novo, ts:Date.now() }, ...d.movimentos] }));
+        goto("STOCK");
+      };
+      const resetStock = () => {
+        setDb(d => {
+          const novos = {};
+          Object.entries(d.produtos).forEach(([k,v]) => { novos[k] = { ...v, stock:0 }; });
+          return { ...d, produtos:novos, movimentos:[{ tipo:"RESET_STOCK", ts:Date.now() }, ...d.movimentos] };
+        });
+      };
+
+      const criarProduto = ({ nome, simbolo, tipo, preco }) => {
+        if (!nome || db.produtos[nome]) return; // já existe
+        setDb(d => ({
+          ...d,
+          produtos: { ...d.produtos, [nome]: { stock: 0, preco, tipo } },
+        }));
+        // Guardar símbolo no PROD_DISPLAY dinâmico (via estado local)
+        setProdDisplayExtra(prev => ({ ...prev, [nome]: { emoji: simbolo, label: nome } }));
+        goto("STOCK");
+      };
+
+      const eliminarProduto = (nome) => {
+        setDb(d => { const p = { ...d.produtos }; delete p[nome]; return { ...d, produtos: p }; });
+        setProdDisplayExtra(prev => { const n = { ...prev }; delete n[nome]; return n; });
+      };
+      const registarEmprestimo = (descricao) => {
+        if (!empClienteSel || empValor <= 0) return;
+        setDb(d => ({
+          ...d,
+          clientes: { ...d.clientes, [empClienteSel]: { ...d.clientes[empClienteSel], emprestimo: (d.clientes[empClienteSel].emprestimo || 0) + empValor } },
+          movimentos: [{ tipo:"EMPRESTIMO", cliente:empClienteSel, valor:empValor, descricao, ts:Date.now() }, ...d.movimentos],
+        }));
+        goto("EMPRESTIMOS");
+      };
+
+      // Ler directamente dos campos do cliente — sem dependência de movimentos
+      const totalDividas     = Object.values(db.clientes).reduce((s,c) => s + (c.divida||0), 0);
+      const totalEmprestimos = Object.values(db.clientes).reduce((s,c) => s + (c.emprestimo||0), 0);
+      const TITLES = { MENU:"MENU", CLIENTES:"CLIENTES", NOVO_CLIENTE:"NOVO CLIENTE", FICHA_CLIENTE: fichaCliente ?? "CLIENTE", PAGAMENTO:"PAGAMENTO", PAGAMENTO_EMP:"RECEBER EMP.", METODO_PAGAMENTO:"MÉTODO", METODO_EMP:"MÉTODO EMP.", VENDA_PRODUTOS:"VENDER", VENDA_PRECO:"VALOR UNIT.", VENDA_UNIDADES:"UNIDADES", STOCK:"STOCK", ADD_STOCK_Q:"ADD STOCK", EDIT_STOCK_VALUE:"EDITAR STOCK", MOVIMENTOS:"HISTÓRICO", EMPRESTIMOS:"EMPRÉSTIMOS", EMPRESTIMO_CLIENTE:"QUEM?", EMPRESTIMO_VALOR:"QUANTIA", EMPRESTIMO_DESCRICAO:"DESCRIÇÃO", NOVO_PRODUTO:"NOVO PRODUTO" };
+
+      const [saveFlash, setSaveFlash] = useState(false);
+
+      /* EXPORT — descarrega JSON para o telemóvel */
+      const exportDB = () => {
+        try {
+          const json = JSON.stringify(db, null, 2);
+          const blob = new Blob([json], { type: 'application/json' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          const date = new Date();
+          const stamp = `${date.getDate().toString().padStart(2,'0')}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getFullYear()}`;
+          a.href     = url;
+          a.download = `sidehustle_${stamp}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          // Flash de confirmação
+          playSound("confirm");
+          setSaveFlash(true);
+          setTimeout(() => setSaveFlash(false), 1800);
+        } catch(e) {}
+      };
+
+      /* IMPORT — carrega JSON guardado */
+      const importDB = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const parsed = JSON.parse(ev.target.result);
+              if (parsed.clientes && parsed.produtos && parsed.movimentos) {
+                setDb(parsed);
+                playSound("confirm");
+                setSaveFlash(true);
+                setTimeout(() => setSaveFlash(false), 1800);
+              }
+            } catch(err) {}
+          };
+          reader.readAsText(file);
+        };
+        document.body.appendChild(input);
+        input.click();
+        document.body.removeChild(input);
+      };
+
+      const renderMeta = () => {
+        if (screen==="MENU") return (
+          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2}}>
+            {totalDividas > 0 ? (
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#ff3300"}}>-{totalDividas}€</span>
+              </div>
+            ) : (
+              <div style={{display:"flex", alignItems:"center", gap:5}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:2}}>VENDAS</span>
+                <span style={{fontSize:13}}>✅</span>
+              </div>
+            )}
+            {totalEmprestimos > 0 ? (
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#aaa", letterSpacing:2}}>EMP.</span>
+                <span style={{fontFamily:GTA, fontSize:15, color:"#cc44ff"}}>-{totalEmprestimos}€</span>
+              </div>
+            ) : (
+              <div style={{display:"flex", alignItems:"center", gap:5}}>
+                <span style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:2}}>EMP.</span>
+                <span style={{fontSize:13}}>✅</span>
+              </div>
+            )}
+          </div>
+        );
+        if (screen==="VENDA_PRODUTOS" && clienteVenda) return <div style={{...S.headerMeta,color:"#999"}}>{clienteVenda}</div>;
+        if (screen==="VENDA_PRECO" && produtoVenda) return <div style={{...S.headerMeta,color:"#999"}}>{produtoVenda}</div>;
+        if (screen==="VENDA_UNIDADES" && produtoVenda) return <div style={{...S.headerMeta,color:"#999"}}>{produtoVenda} · {db.produtos[produtoVenda].tipo==="VOLATIL" ? valorVolatil : (db.produtos[produtoVenda].preco ?? 0)}€</div>;
+        if (screen==="PAGAMENTO" && clientePagamento) return <div style={{...S.headerMeta,color:"#ff3300"}}>-{db.clientes[clientePagamento]?.divida ?? 0}€</div>;
+        return null;
+      };
+
+      return (
+        <>
+          {screen === "SPLASH" && <SplashScreen onDone={() => goto("MENU")} />}
+          {modal && <ConfirmModal config={modal} onCancel={closeModal} />}
+
+          <div style={S.root}>
+            <div style={S.scanlines} />
+            <div style={S.page}>
+
+              {screen !== "SPLASH" && <>
+                <div style={S.header}>
+                  <div style={S.headerLeft}>
+                    <span style={S.headerBrand}>SIDE HUSTLE</span>
+                    <span style={S.headerScreen}>{TITLES[screen] ?? screen}</span>
+                  </div>
+                  <div style={S.headerRight}>
+                    {renderMeta()}
+                    <button style={{...S.muteBtn, borderColor:muted?"#333":"#1e1e1e", color:muted?"#333":"#555"}}
+                      onClick={() => setMuted(m => !m)}>
+                      {muted ? "🔇" : "🔈"}
+                    </button>
+                  </div>
+                  <div style={S.headerAccent} />
+                </div>
+                <div style={S.divider} />
+              </>}
+
+              {/* MENU */}
+              {screen==="MENU" && <>
+                <button style={S.menuBtn} onClick={() => { playSound("select"); goto("CLIENTES"); }}>👤 CLIENTES</button>
+                <button style={S.menuBtn} onClick={() => { playSound("select"); goto("STOCK"); }}>📦 STOCK</button>
+                <button style={S.menuBtn} onClick={() => { playSound("select"); goto("EMPRESTIMOS"); }}>🤝 EMPRÉSTIMOS</button>
+                <button style={S.menuBtn} onClick={() => { playSound("select"); goto("MOVIMENTOS"); }}>📋 MOVIMENTOS</button>
+
+                {/* Divider */}
+                <div style={{ height:1, background:"#111", margin:"18px 16px 0" }} />
+
+                {/* Save / Load row */}
+                <div style={{ display:"flex", gap:8, margin:"10px 16px 0" }}>
+                  <button
+                    style={{
+                      flex:1, padding:"13px 0",
+                      background: saveFlash ? "#0d1a00" : "#060606",
+                      border: `1px solid ${saveFlash ? "#00cc44" : "#222"}`,
+                      borderLeft: `3px solid ${saveFlash ? "#00cc44" : "#333"}`,
+                      color: saveFlash ? "#00cc44" : "#555",
+                      fontFamily:GTA, fontSize:15, letterSpacing:3, cursor:"pointer",
+                      transition:"all 0.3s",
+                    }}
+                    onClick={exportDB}>
+                    {saveFlash ? "✓ GUARDADO" : "💾 GUARDAR"}
+                  </button>
+                  <button
+                    style={{
+                      flex:1, padding:"13px 0",
+                      background:"#060606",
+                      border:"1px solid #222",
+                      borderLeft:"3px solid #333",
+                      color:"#aaa",
+                      fontFamily:GTA, fontSize:15, letterSpacing:3, cursor:"pointer",
+                    }}
+                    onClick={importDB}>
+                    📂 CARREGAR
+                  </button>
+                </div>
+              </>}
+
+              {/* CLIENTES */}
+              {screen==="CLIENTES" && <>
+                {Object.keys(db.clientes).length === 0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>NENHUM CLIENTE</div>}
+                {Object.entries(db.clientes).map(([nome, c]) => {
+                  const totalDevido = (c.divida||0) + (c.emprestimo||0);
+                  return (
+                    <div key={nome} style={S.clienteRow}>
+                      <span style={{...S.clienteNome, cursor:"pointer"}} onClick={() => { playSound("select"); setFichaCliente(nome); goto("FICHA_CLIENTE"); }}>{nome}</span>
+                      {totalDevido > 0 && <span style={S.divida}>-{totalDevido}€</span>}
+                      <button style={S.smallBtn} onClick={() => { playSound("select"); setClienteVenda(nome); goto("VENDA_PRODUTOS"); }}>VENDER</button>
+                      <button style={c.divida>0 ? S.smallBtnGreen : S.smallBtnOff} disabled={!c.divida}
+                        onClick={() => { playSound("select"); setClientePagamento(nome); goto("PAGAMENTO"); }}>PAGAR</button>
+                    </div>
+                  );
+                })}
+                <button style={S.menuBtn} onClick={() => { playSound("select"); goto("NOVO_CLIENTE"); }}>+ NOVO CLIENTE</button>
+                <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
+              </>}
+
+              {/* NOVO CLIENTE */}
+              {screen==="NOVO_CLIENTE" && <NovoClienteScreen onConfirm={criarCliente} onBack={() => { playSound("back"); goto("CLIENTES"); }} />}
+
+              {/* FICHA CLIENTE */}
+              {screen==="FICHA_CLIENTE" && fichaCliente && (() => {
+                const c = db.clientes[fichaCliente];
+                if (!c) { goto("CLIENTES"); return null; }
+                const totalDevido = (c.divida||0) + (c.emprestimo||0);
+                // movimentos de vendas
+                const movsVenda = db.movimentos.filter(m => (m.tipo==="VENDA"||m.tipo==="PAGAMENTO") && m.cliente===fichaCliente);
+                const totalGasto = movsVenda.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
+                const totalPago  = movsVenda.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0);
+                // movimentos de empréstimos
+                const movsEmp = db.movimentos.filter(m => (m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO") && m.cliente===fichaCliente);
+                const totalEmprestado = movsEmp.filter(m=>m.tipo==="EMPRESTIMO").reduce((s,m)=>s+m.valor,0);
+                const totalEmpPago    = movsEmp.filter(m=>m.tipo==="PAGAMENTO_EMPRESTIMO").reduce((s,m)=>s+m.valor,0);
+                // todos os movimentos deste cliente
+                const todosMovs = db.movimentos.filter(m => m.cliente===fichaCliente);
+                return (
+                  <>
+                    <div style={S.fichaHero}>
+                      <div style={S.fichaNome}>{fichaCliente}</div>
+
+                      {/* Dívida total */}
+                      {totalDevido > 0
+                        ? <div style={{...S.fichaDivida, marginTop:6}}>-{totalDevido}€ total em dívida</div>
+                        : <div style={S.fichaZero}>SEM DÍVIDAS</div>
+                      }
+
+                      {/* Breakdown vendas + empréstimos */}
+                      <div style={{display:"flex", gap:16, marginTop:12, flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>VENDAS</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:(c.divida||0)>0?"#ff3300":"#333"}}>
+                            {(c.divida||0)>0 ? `-${c.divida}€` : "✅"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>EMPRÉSTIMO</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:(c.emprestimo||0)>0?"#cc44ff":"#333"}}>
+                            {(c.emprestimo||0)>0 ? `-${c.emprestimo}€` : "✅"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>GASTO TOTAL</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:"#f5c800"}}>{totalGasto}€</div>
+                        </div>
+                        <div>
+                          <div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>PAGO TOTAL</div>
+                          <div style={{fontFamily:GTA,fontSize:16,color:"#00cc44"}}>{totalPago + totalEmpPago}€</div>
+                        </div>
+                      </div>
+
+                      {/* Acções */}
+                      <div style={S.fichaActions}>
+                        <button style={S.fichaBtn}
+                          onClick={() => { playSound("select"); setClienteVenda(fichaCliente); goto("VENDA_PRODUTOS"); }}>
+                          VENDER
+                        </button>
+                        <button style={S.fichaBtnPurple}
+                          onClick={() => { playSound("select"); setEmpClienteSel(fichaCliente); goto("EMPRESTIMO_VALOR"); }}>
+                          EMPRESTAR
+                        </button>
+                        <button
+                          style={c.divida>0 ? S.fichaBtnGreen : {...S.fichaBtn,borderColor:"#1a1a1a",color:"#333",cursor:"not-allowed"}}
+                          disabled={!(c.divida>0)}
+                          onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO"); }}>
+                          PAGAR
+                        </button>
+                        {(c.emprestimo||0) > 0 && (
+                          <button style={{...S.fichaBtnPurple, borderColor:"#44ffcc", color:"#44ffcc"}}
+                            onClick={() => { playSound("select"); setClientePagamento(fichaCliente); goto("PAGAMENTO_EMP"); }}>
+                            REC.EMP
+                          </button>
+                        )}
+                        <button style={S.fichaBtnRed} onClick={() => {
+                          playSound("back");
+                          if (totalDevido > 0) { ask({ message:"LIQUIDA AS DÍVIDAS PRIMEIRO", sub:`${fichaCliente} tem -${totalDevido}€ em aberto.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} }); return; }
+                          ask({ message:`ELIMINAR ${fichaCliente}?`, sub:"Esta acção não pode ser revertida.", confirmLabel:"ELIMINAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarCliente(fichaCliente) });
+                        }}>🗑</button>
+                      </div>
+                    </div>
+
+                    {/* Histórico de vendas */}
+                    {movsVenda.length > 0 && <>
+                      <div style={S.fichaSection}>VENDAS</div>
+                      {movsVenda.map(m => {
+                        const cor = m.tipo==="VENDA" ? "#f5c800" : "#00cc44";
+                        const detalhe = m.tipo==="VENDA"
+                          ? `${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`
+                          : `+${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                        return (
+                          <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                            <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="VENDA"?"💰":"✅"}  {m.tipo}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                            <div style={S.movBody}>{detalhe}</div>
+                            {m.tipo==="VENDA" && <div style={S.movFooter}><button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => { undoVenda(m); goto("CLIENTES"); } })}>↩ UNDO</button></div>}
+                          </div>
+                        );
+                      })}
+                    </>}
+
+                    {/* Histórico de empréstimos */}
+                    {movsEmp.length > 0 && <>
+                      <div style={S.fichaSection}>EMPRÉSTIMOS</div>
+                      {movsEmp.map(m => {
+                        const cor = m.tipo==="EMPRESTIMO" ? "#cc44ff" : "#44ffcc";
+                        const detalhe = m.tipo==="EMPRESTIMO"
+                          ? `${m.valor}€${m.descricao && m.descricao!=="—" ? "  ·  "+m.descricao : ""}`
+                          : `+${m.valor}€ recebido${m.metodo ? "  ·  "+m.metodo : ""}`;
+                        return (
+                          <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                            <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="EMPRESTIMO"?"🤝":"💸"}  {m.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                            <div style={S.movBody}>{detalhe}</div>
+                          </div>
+                        );
+                      })}
+                    </>}
+
+                    {todosMovs.length === 0 && <div style={S.fichaEmpty}>SEM MOVIMENTOS</div>}
+                    <button style={S.backBtn} onClick={() => { playSound("back"); goto("CLIENTES"); }}>← VOLTAR</button>
+                  </>
+                );
+              })()}
+
+              {/* EMPRESTIMOS */}
+              {screen==="EMPRESTIMOS" && (() => {
+                const clientesComEmp = Object.entries(db.clientes).filter(([, c]) => (c.emprestimo || 0) > 0);
+                const totalEmp = clientesComEmp.reduce((s,[,c]) => s + (c.emprestimo||0), 0);
+                return (
+                  <>
+                    {totalEmp > 0 ? (
+                      <div style={{padding:"12px 16px 8px", borderBottom:"1px solid #111", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                        <span style={{fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>TOTAL EMPRESTADO</span>
+                        <span style={{fontFamily:GTA, fontSize:20, color:"#cc44ff"}}>-{totalEmp}€</span>
+                      </div>
+                    ) : (
+                      <div style={{padding:"20px 16px 12px", borderBottom:"1px solid #111", display:"flex", alignItems:"center", gap:10}}>
+                        <span style={{fontSize:22}}>✅</span>
+                        <span style={{fontFamily:GTA, fontSize:14, color:"#aaa", letterSpacing:2}}>TUDO LIQUIDADO</span>
+                      </div>
+                    )}
+                    {clientesComEmp.length === 0 && (
+                      <div style={{padding:"20px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>SEM EMPRÉSTIMOS ACTIVOS</div>
+                    )}
+                    {clientesComEmp.map(([nome, c]) => (
+                      <div key={nome} style={{...S.clienteRow, borderLeft:"3px solid #cc44ff"}}>
+                        <span style={S.clienteNome}>{nome}</span>
+                        <span style={{...S.divida, color:"#cc44ff"}}>-{c.emprestimo}€</span>
+                        <button style={{...S.smallBtnGreen, borderColor:"#44ffcc", color:"#44ffcc"}}
+                          onClick={() => { playSound("select"); setPagarOrigem("EMPRESTIMOS"); setClientePagamento(nome); goto("PAGAMENTO_EMP"); }}>
+                          RECEBER
+                        </button>
+                      </div>
+                    ))}
+                    <button style={{...S.menuBtn, marginTop:16}} onClick={() => { playSound("select"); goto("EMPRESTIMO_CLIENTE"); }}>
+                      + NOVO EMPRÉSTIMO
+                    </button>
+                    <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
+                  </>
+                );
+              })()}
+
+              {/* EMPRESTIMO — ESCOLHER CLIENTE */}
+              {screen==="EMPRESTIMO_CLIENTE" && <>
+                <div style={{padding:"10px 16px 4px", fontFamily:GTA, fontSize:11, color:"#aaa", letterSpacing:2}}>SELECIONAR CLIENTE</div>
+                {Object.keys(db.clientes).length === 0 && (
+                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>CRIA UM CLIENTE PRIMEIRO</div>
+                )}
+                {Object.entries(db.clientes).map(([nome, c]) => (
+                  <div key={nome} style={S.produtoRow} onClick={() => { playSound("select"); setEmpClienteSel(nome); goto("EMPRESTIMO_VALOR"); }}>
+                    <span style={S.produtoNome}>{nome}</span>
+                    {(c.divida||0) > 0 && <span style={{fontFamily:GTA, fontSize:13, color:"#ff3300"}}>-{c.divida}€</span>}
+                  </div>
+                ))}
+                <button style={S.backBtn} onClick={() => { playSound("back"); goto("EMPRESTIMOS"); }}>← VOLTAR</button>
+              </>}
+
+              {/* EMPRESTIMO — VALOR */}
+              {screen==="EMPRESTIMO_VALOR" && empClienteSel && (
+                <NumPadInput
+                  decimals
+                  label={`QUANTIA EMPRESTADA — ${empClienteSel}`}
+                  onConfirm={(v) => { setEmpValor(v); goto("EMPRESTIMO_DESCRICAO"); }}
+                  onBack={() => goto("EMPRESTIMO_CLIENTE")}
+                />
+              )}
+
+              {/* EMPRESTIMO — DESCRIÇÃO */}
+              {screen==="EMPRESTIMO_DESCRICAO" && empClienteSel && (
+                <DescricaoInput
+                  label={`DESCRIÇÃO — ${empClienteSel}  ·  ${empValor}€`}
+                  onConfirm={registarEmprestimo}
+                  onBack={() => goto("EMPRESTIMO_VALOR")}
+                />
+              )}
+
+              {/* PAGAMENTO — dívidas de vendas */}
+              {screen==="PAGAMENTO" && clientePagamento && (
+                <NumPadInput decimals
+                  label={`${clientePagamento} · DÍVIDA VENDAS: ${db.clientes[clientePagamento].divida||0}€`}
+                  onConfirm={(v) => {
+                    if (v > (db.clientes[clientePagamento].divida||0)) return;
+                    setPagarValorPendente(v);
+                    goto("METODO_PAGAMENTO");
+                  }}
+                  onBack={() => goto("CLIENTES")}
+                />
+              )}
+
+              {/* METODO PAGAMENTO — vendas */}
+              {screen==="METODO_PAGAMENTO" && clientePagamento && (
+                <>
+                  <div style={{padding:"16px 16px 6px", fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>
+                    {clientePagamento}  ·  {pagarValorPendente}€
+                  </div>
+                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>COMO RECEBESTE?</div>
+                  {[
+                    { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
+                    { id:"MBWAY", icon:"📱", label:"MBWAY" },
+                  ].map(m => (
+                    <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
+                      onClick={() => { playSound("confirm"); pagar(m.id); }}>
+                      <span style={{fontSize:26}}>{m.icon}</span>{m.label}
+                    </button>
+                  ))}
+                  <button style={S.backBtn} onClick={() => { playSound("back"); goto("PAGAMENTO"); }}>← VOLTAR</button>
+                </>
+              )}
+
+              {/* PAGAMENTO_EMP — receber empréstimo */}
+              {screen==="PAGAMENTO_EMP" && clientePagamento && (
+                <NumPadInput decimals
+                  label={`${clientePagamento} · EMPRÉSTIMO: ${db.clientes[clientePagamento].emprestimo||0}€`}
+                  onConfirm={(v) => {
+                    if (v > (db.clientes[clientePagamento].emprestimo||0)) return;
+                    setPagarValorPendente(v);
+                    goto("METODO_EMP");
+                  }}
+                  onBack={() => goto("EMPRESTIMOS")}
+                />
+              )}
+
+              {/* METODO_EMP — método pagamento empréstimo */}
+              {screen==="METODO_EMP" && clientePagamento && (
+                <>
+                  <div style={{padding:"16px 16px 6px", fontFamily:GTA, fontSize:12, color:"#aaa", letterSpacing:2}}>
+                    {clientePagamento}  ·  {pagarValorPendente}€
+                  </div>
+                  <div style={{padding:"8px 16px 0", fontFamily:GTA, fontSize:11, color:"#444", letterSpacing:2}}>COMO RECEBESTE?</div>
+                  {[
+                    { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
+                    { id:"MBWAY", icon:"📱", label:"MBWAY" },
+                  ].map(m => (
+                    <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #cc44ff", color:"#cc44ff", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
+                      onClick={() => { playSound("confirm"); pagarEmprestimo(m.id); }}>
+                      <span style={{fontSize:26}}>{m.icon}</span>{m.label}
+                    </button>
+                  ))}
+                  <button style={S.backBtn} onClick={() => { playSound("back"); goto("PAGAMENTO_EMP"); }}>← VOLTAR</button>
+                </>
+              )}
+
+              {/* VENDA PRODUTOS */}
+              {screen==="VENDA_PRODUTOS" && <>
+                {Object.entries(db.produtos).map(([p, prod]) => {
+                  const disp = prodDisplayExtra[p] || PROD_DISPLAY[p] || { emoji:"📦", label:p };
+                  return (
+                    <div key={p} style={S.produtoRow} onClick={() => { playSound("select"); escolherProduto(p); }}>
+                      <div style={{display:"flex", alignItems:"center", gap:12}}>
+                        <span style={{fontSize:26, lineHeight:1}}>{disp.emoji}</span>
+                        <div>
+                          <div style={S.produtoNome}>{p}</div>
+                          {prod.preco != null && <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",marginTop:2}}>{prod.preco}€ / UNID</div>}
+                        </div>
+                      </div>
+                      {prod.tipo==="FIXO" ? <span style={prod.stock===0 ? S.badgeRed : S.badge}>STOCK {prod.stock}</span> : <span style={S.badge}>VOLATIL</span>}
+                    </div>
+                  );
+                })}
+                <button style={S.backBtn} onClick={() => { playSound("back"); goto("CLIENTES"); }}>← VOLTAR</button>
+              </>}
+
+              {/* VENDA PREÇO */}
+              {screen==="VENDA_PRECO" && <NumPadInput decimals label={`VALOR UNITÁRIO — ${produtoVenda}`} onConfirm={confirmarPrecoVolatil} onBack={() => goto("VENDA_PRODUTOS")} />}
+
+              {/* VENDA UNIDADES */}
+              {screen==="VENDA_UNIDADES" && produtoVenda && <NumPadInput
+                label={`UNIDADES — ${produtoVenda}  ·  ${db.produtos[produtoVenda].tipo==="VOLATIL" ? valorVolatil : (db.produtos[produtoVenda].preco??0)}€ / UNID`}
+                onConfirm={vender}
+                onBack={() => goto(db.produtos[produtoVenda].tipo==="VOLATIL" ? "VENDA_PRECO" : "VENDA_PRODUTOS")} />}
+
+              {/* STOCK */}
+              {screen==="STOCK" && <>
+                {Object.keys(db.produtos).length === 0 && (
+                  <div style={{padding:"28px 16px", fontFamily:GTA, color:"#999", fontSize:14, letterSpacing:2}}>
+                    SEM PRODUTOS — ADICIONA O PRIMEIRO
+                  </div>
+                )}
+                <div style={S.stockGrid}>
+                  {Object.entries(db.produtos).map(([n, p]) => {
+                    const disp = prodDisplayExtra[n] || PROD_DISPLAY[n] || { emoji:"📦", label:n };
+                    return (
+                      <div key={n} style={{...S.stockCard, borderColor:"#111"}}>
+                        <div style={{fontSize:28, lineHeight:1}}>{disp.emoji}</div>
+                        <div style={{fontFamily:GTA, fontSize:13, color:"#aaa", letterSpacing:2, marginTop:2}}>{disp.label}</div>
+                        <div style={{...S.stockCardQty, color:"#f5c800"}}>{p.semStock ? "∞" : p.stock}</div>
+                        <div style={S.stockCardSub}>{p.semStock ? "SEM STOCK" : (p.tipo==="FIXO"&&p.preco!=null ? `${p.preco}€/UNID` : "PREÇO VARIÁVEL")}</div>
+                        <div style={S.stockCardActions}>
+                          {p.semStock ? (
+                            <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:1, paddingTop:4}}>DÍVIDA MANUAL</div>
+                          ) : p.tipo==="FIXO" ? <>
+                            <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>
+                            <button style={S.stockBtnOrange} onClick={() => { playSound("select"); setProdutoEdit(n); goto("EDIT_STOCK_VALUE"); }}>EDIT</button>
+                          </> : <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>}
+                          {!p.semStock && (
+                            <button style={{...S.stockBtn, borderColor:"#330000", color:"#aa2200", flex:"0 0 auto", padding:"7px 10px"}}
+                              onClick={() => ask({ message:`APAGAR ${n}?`, sub:"Remove o produto permanentemente.", confirmLabel:"APAGAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarProduto(n) })}>
+                              🗑
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button style={{...S.menuBtn, marginTop:14}} onClick={() => { playSound("select"); goto("NOVO_PRODUTO"); }}>
+                  + NOVO PRODUTO
+                </button>
+                <button style={{...S.dangerBtn,marginTop:10}} onClick={() => { playSound("back"); ask({ message:"RESET STOCK?", sub:"Todas as quantidades vão a zero.", confirmLabel:"RESET", cancelLabel:"CANCELAR", danger:true, onConfirm:resetStock }); }}>
+                  <span>⚠ RESET STOCK TOTAL</span>
+                </button>
+                <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
+              </>}
+
+              {/* ADD STOCK */}
+              {screen==="ADD_STOCK_Q" && <NumPadInput label={`ADD STOCK — ${produtoStock}  (ACTUAL: ${db.produtos[produtoStock??'']?.stock??0})`} onConfirm={addStock} onBack={() => goto("STOCK")} />}
+
+              {/* EDIT STOCK */}
+              {screen==="EDIT_STOCK_VALUE" && <NumPadInput label={`NOVO STOCK — ${produtoEdit}  (ACTUAL: ${db.produtos[produtoEdit??'']?.stock??0})`} onConfirm={overrideStock} onBack={() => goto("STOCK")} />}
+
+              {/* NOVO PRODUTO */}
+              {screen==="NOVO_PRODUTO" && (
+                <NovoProdutoScreen onConfirm={criarProduto} onBack={() => goto("STOCK")} />
+              )}
+
+              {/* MOVIMENTOS */}
+              {screen==="MOVIMENTOS" && (() => {
+                const [cat, setCat]   = React.useState("TUDO");
+                const [tempo, setTempo] = React.useState("TUDO");
+                const [prodFiltro, setProdFiltro] = React.useState("TUDO");
+
+                const agora = Date.now();
+                const umMes = 30 * 24 * 60 * 60 * 1000;
+                const umAno = 365 * 24 * 60 * 60 * 1000;
+
+                // Categorias disponíveis
+                const CATS = [
+                  { id:"TUDO",       label:"TUDO" },
+                  { id:"PAGAMENTOS", label:"PAGAMENTOS" },
+                  { id:"VENDAS",     label:"VENDAS" },
+                  { id:"EMPRESTIMOS",label:"EMPRÉSTIMOS" },
+                  { id:"STOCK",      label:"STOCK" },
+                  { id:"ANULADOS",   label:"ANULADOS" },
+                ];
+
+                // Produtos únicos para filtro de vendas
+                const produtosVendidos = [...new Set(db.movimentos.filter(m=>m.tipo==="VENDA").map(m=>m.produto))];
+
+                // Filtrar movimentos base
+                let base = cat === "ANULADOS"
+                  ? (db.anulados || [])
+                  : db.movimentos.filter(m => {
+                    if (cat === "PAGAMENTOS")  return m.tipo==="PAGAMENTO" || m.tipo==="PAGAMENTO_EMPRESTIMO";
+                    if (cat === "VENDAS")      return m.tipo==="VENDA";
+                    if (cat === "EMPRESTIMOS") return m.tipo==="EMPRESTIMO" || m.tipo==="PAGAMENTO_EMPRESTIMO";
+                    if (cat === "STOCK")       return m.tipo==="ADD_STOCK" || m.tipo==="OVERRIDE_STOCK" || m.tipo==="RESET_STOCK";
+                    return true;
+                  });
+
+                // Filtro de produto (só para VENDAS)
+                if (cat === "VENDAS" && prodFiltro !== "TUDO") {
+                  base = base.filter(m => m.produto === prodFiltro);
+                }
+
+                // Filtro de tempo
+                if (tempo === "MES")  base = base.filter(m => (agora - m.ts) <= umMes);
+                if (tempo === "ANO")  base = base.filter(m => (agora - m.ts) <= umAno);
+
+                // Total de valor dos itens filtrados
+                const totalFiltro = base.reduce((s,m) => {
+                  if (m.tipo==="VENDA" || m.tipo==="EMPRESTIMO") return s + (m.valor||0);
+                  if (m.tipo==="PAGAMENTO" || m.tipo==="PAGAMENTO_EMPRESTIMO") return s + (m.valor||0);
+                  return s;
+                }, 0);
+
+                // Total por método (só pagamentos)
+                const totalDin = base.filter(m=>m.metodo==="DINHEIRO").reduce((s,m)=>s+(m.valor||0),0);
+                const totalMbw = base.filter(m=>m.metodo==="MBWAY").reduce((s,m)=>s+(m.valor||0),0);
+
+                const btnCat = (id, label) => (
+                  <button key={id} style={{
+                    padding:"7px 12px", fontFamily:GTA, fontSize:12, letterSpacing:2,
+                    background: cat===id ? "#1a1500" : "#0a0a0a",
+                    border: `1px solid ${cat===id ? "#f5c800" : "#222"}`,
+                    color: cat===id ? "#f5c800" : "#555",
+                    cursor:"pointer",
+                  }} onClick={() => { playSound("hover"); setCat(id); setProdFiltro("TUDO"); }}>
+                    {label}
+                  </button>
+                );
+
+                const btnTempo = (id, label) => (
+                  <button key={id} style={{
+                    padding:"6px 10px", fontFamily:GTA, fontSize:11, letterSpacing:1,
+                    background: tempo===id ? "#0d1a00" : "#0a0a0a",
+                    border: `1px solid ${tempo===id ? "#00cc44" : "#222"}`,
+                    color: tempo===id ? "#00cc44" : "#555",
+                    cursor:"pointer",
+                  }} onClick={() => { playSound("hover"); setTempo(id); }}>
+                    {label}
+                  </button>
+                );
+
+                return (
+                  <>
+                    {/* Filtro Categoria */}
+                    <div style={{padding:"12px 16px 6px"}}>
+                      <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:8}}>CATEGORIA</div>
+                      <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
+                        {CATS.map(c => btnCat(c.id, c.label))}
+                      </div>
+                    </div>
+
+                    {/* Sub-filtro produto (só vendas) */}
+                    {cat==="VENDAS" && produtosVendidos.length > 0 && (
+                      <div style={{padding:"6px 16px 6px"}}>
+                        <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:6}}>PRODUTO</div>
+                        <div style={{display:"flex", flexWrap:"wrap", gap:4}}>
+                          {["TUDO", ...produtosVendidos].map(p => (
+                            <button key={p} style={{
+                              padding:"5px 10px", fontFamily:GTA, fontSize:11, letterSpacing:1,
+                              background: prodFiltro===p ? "#1a1500" : "#0a0a0a",
+                              border: `1px solid ${prodFiltro===p ? "#f5c800" : "#222"}`,
+                              color: prodFiltro===p ? "#f5c800" : "#555",
+                              cursor:"pointer",
+                            }} onClick={() => { playSound("hover"); setProdFiltro(p); }}>{p}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filtro Tempo */}
+                    <div style={{padding:"6px 16px 0"}}>
+                      <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:6}}>PERÍODO</div>
+                      <div style={{display:"flex", gap:6}}>
+                        {btnTempo("MES","ÚLTIMO MÊS")}
+                        {btnTempo("ANO","ÚLTIMO ANO")}
+                        {btnTempo("TUDO","TUDO")}
+                      </div>
+                    </div>
+
+                    {/* Sumário */}
+                    {base.length > 0 && (
+                      <div style={{margin:"10px 16px 0", padding:"10px 14px", background:"#060606", borderLeft:"3px solid #333", display:"flex", gap:20, flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>RESULTADOS</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#fff"}}>{base.length}</div>
+                        </div>
+                        {totalFiltro > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>TOTAL</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalFiltro}€</div>
+                        </div>}
+                        {(cat==="PAGAMENTOS"||cat==="TUDO") && totalDin > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>💵</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalDin}€</div>
+                        </div>}
+                        {(cat==="PAGAMENTOS"||cat==="TUDO") && totalMbw > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>📱</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalMbw}€</div>
+                        </div>}
+                      </div>
+                    )}
+
+                    <div style={{height:1, background:"#111", margin:"10px 0 0"}} />
+
+                    {/* Resultados */}
+                    {base.length===0 && <div style={{padding:"24px 16px",fontFamily:GTA,color:"#333",fontSize:13,letterSpacing:2}}>SEM RESULTADOS</div>}
+                    {base.map(m => {
+                      const tipo = m.tipo || "VENDA_ANULADA";
+                      const cor = tipo==="VENDA_ANULADA" ? "#555" : (MOV_COLOR[tipo] ?? "#f5c800");
+                      let detalhe = "";
+                      if(tipo==="VENDA")               detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`;
+                      if(tipo==="VENDA_ANULADA")        detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€  ·  ANULADA`;
+                      if(tipo==="PAGAMENTO")            detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                      if(tipo==="ADD_STOCK")            detalhe=`${m.produto}  ·  +${m.unidades} unid`;
+                      if(tipo==="OVERRIDE_STOCK")       detalhe=`${m.produto}  ·  ${m.antes} → ${m.depois} unid`;
+                      if(tipo==="RESET_STOCK")          detalhe=`stock total resetado`;
+                      if(tipo==="EMPRESTIMO")           detalhe=`${m.cliente}  ·  ${m.valor}€  ·  ${m.descricao||'—'}`;
+                      if(tipo==="PAGAMENTO_EMPRESTIMO") detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                      const icon = tipo==="VENDA_ANULADA" ? "↩" : (MOV_ICON[tipo] ?? "·");
+                      return (
+                        <div key={m.tsAnulado||m.ts} style={{...S.movCard, borderLeftColor:cor}}>
+                          <div style={S.movHeader}>
+                            <span style={{...S.movTipo, color:cor}}>{icon}  {tipo.replace(/_/g," ")}</span>
+                            <span style={S.movTs}>{fmtTime(m.tsAnulado||m.ts)}</span>
+                          </div>
+                          <div style={S.movBody}>{detalhe}</div>
+                          {tipo==="VENDA" && (
+                            <div style={S.movFooter}>
+                              <button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.cliente}  ·  ${m.produto}  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => undoVenda(m) })}>↩ UNDO</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {cat !== "ANULADOS" && <button style={{...S.dangerBtn,marginTop:20}} onClick={() => { playSound("back"); ask({ message:"LIMPAR HISTÓRICO?", sub:"Todos os movimentos serão apagados.", confirmLabel:"LIMPAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => setDb(d => ({...d,movimentos:[]})) }); }}>
+                      <span>🗑 LIMPAR HISTÓRICO</span>
+                    </button>}
+
+                    <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
+                  </>
+                );
+              })()}
+
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+  <!-- Cache da página para funcionar offline após primeira visita -->
+  <script>
+    // Guarda a própria página no Cache API (persiste entre sessões, ao contrário de blob SW)
+    if ('caches' in window) {
+      const PAGE_URL = window.location.href;
+      const CACHE_NAME = 'sidehustle-page-v2';
+      caches.open(CACHE_NAME).then(cache => {
+        fetch(PAGE_URL).then(res => {
+          if (res.ok) cache.put(PAGE_URL, res);
+        }).catch(() => {});
+      });
+    }
+
+    // Service Worker persistente via URL de dados inline (funciona em Chromium)
+    if ('serviceWorker' in navigator) {
+      const SW = `
+const C='sh-v2';
+self.addEventListener('install',e=>{self.skipWaiting();});
+self.addEventListener('activate',e=>{self.clients.claim();});
+self.addEventListener('fetch',e=>{
+  e.respondWith(
+    caches.open(C).then(cache=>
+      cache.match(e.request).then(cached=>{
+        const net=fetch(e.request).then(res=>{
+          if(res&&res.status===200) cache.put(e.request,res.clone());
+          return res;
+        }).catch(()=>cached);
+        return cached||net;
+      })
+    )
+  );
+});`;
+      try {
+        const blob = new Blob([SW],{type:'text/javascript'});
+        const url  = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(url).then(reg=>{
+          // Guarda o URL no sessionStorage para re-registar se necessário
+          sessionStorage.setItem('sw_registered','1');
+        }).catch(()=>{});
+      } catch(e) {}
+
+      // Se já estamos em standalone e o SW não está activo, forçar reload com cache
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (!reg) {
+            // Tentar carregar do Cache API
+            if ('caches' in window) {
+              caches.match(window.location.href).then(res => {
+                // App carregada — não fazer nada, já está a correr
+              });
+            }
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
