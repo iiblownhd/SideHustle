@@ -73,12 +73,15 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const KEY = "sidehustle_v44";
+    const KEY = "sidehustle_v45";
 
     const sampleDB = {
       clientes: {},
-      produtos: {},
+      produtos: {
+        "+++": { stock: 0, preco: undefined, tipo: "VOLATIL", semStock: true },
+      },
       movimentos: [],
+      anulados: [],
     };
 
     const GTA  = "'Bebas Neue', 'Impact', 'Arial Black', sans-serif";
@@ -215,6 +218,7 @@
       "PEÇA": { emoji:"🧩", label:"PEÇA" },
       "1/4":  { emoji:"🔹", label:"1/4" },
       "1/8":  { emoji:"🔸", label:"1/8" },
+      "+++":  { emoji:"✍️", label:"+++" },
     };
 
     /* ---- CONFIRM MODAL ---- */
@@ -575,14 +579,17 @@
         if (!clienteVenda || !produtoVenda) return;
         const prod = db.produtos[produtoVenda];
         const isVolatil = prod.tipo === "VOLATIL";
-        if (!isVolatil && prod.stock < u) {
+        const isSemStock = prod.semStock === true; // produto especial sem stock (ex: +++)
+        // Verificar stock: FIXO e VOLATIL precisam de stock, semStock não
+        if (!isSemStock && prod.stock < u) {
           ask({ message:"SEM STOCK", sub:`${produtoVenda} não tem ${u} unidades.`, confirmLabel:"OK", cancelLabel:"OK", onConfirm:()=>{} });
           return;
         }
         const preco = isVolatil ? valorVolatil : (prod.preco ?? 0);
         const valor = preco * u;
         setDb(d => ({ ...d,
-          produtos: { ...d.produtos, [produtoVenda]: { ...prod, stock: Math.max(0, prod.stock - u) } },
+          // só decrementa stock se não for semStock
+          produtos: isSemStock ? d.produtos : { ...d.produtos, [produtoVenda]: { ...prod, stock: Math.max(0, prod.stock - u) } },
           clientes: { ...d.clientes, [clienteVenda]: { ...d.clientes[clienteVenda], divida: (d.clientes[clienteVenda].divida||0) + valor } },
           movimentos: [{ tipo:"VENDA", cliente:clienteVenda, produto:produtoVenda, unidades:u, valor, valorUnit:preco, ts:Date.now() }, ...d.movimentos]
         }));
@@ -593,10 +600,16 @@
       const undoVenda = (mov) => {
         setDb(d => {
           const prod = d.produtos[mov.produto];
+          const isSemStock = prod?.semStock === true;
+          const deletedLog = { ...mov, tipo:"VENDA_ANULADA", tsAnulado: Date.now() };
           return { ...d,
-            produtos: { ...d.produtos, [mov.produto]: { ...prod, stock: prod.stock + mov.unidades } },
+            // só devolve stock se produto existir e não for semStock
+            produtos: (prod && !isSemStock)
+              ? { ...d.produtos, [mov.produto]: { ...prod, stock: prod.stock + mov.unidades } }
+              : d.produtos,
             clientes: { ...d.clientes, [mov.cliente]: { ...d.clientes[mov.cliente], divida: Math.max(0, (d.clientes[mov.cliente].divida||0) - mov.valor) } },
-            movimentos: d.movimentos.filter(m => m.ts !== mov.ts)
+            movimentos: d.movimentos.filter(m => m.ts !== mov.ts),
+            anulados: [deletedLog, ...(d.anulados || [])],
           };
         });
         playSound("back");
@@ -1042,8 +1055,6 @@
                   {[
                     { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
                     { id:"MBWAY", icon:"📱", label:"MBWAY" },
-                    { id:"TRANSFERÊNCIA", icon:"🏦", label:"TRANSFERÊNCIA" },
-                    { id:"OUTRO", icon:"💳", label:"OUTRO" },
                   ].map(m => (
                     <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #f5c800", color:"#f5c800", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
                       onClick={() => { playSound("confirm"); pagar(m.id); }}>
@@ -1077,8 +1088,6 @@
                   {[
                     { id:"DINHEIRO", icon:"💵", label:"DINHEIRO" },
                     { id:"MBWAY", icon:"📱", label:"MBWAY" },
-                    { id:"TRANSFERÊNCIA", icon:"🏦", label:"TRANSFERÊNCIA" },
-                    { id:"OUTRO", icon:"💳", label:"OUTRO" },
                   ].map(m => (
                     <button key={m.id} style={{ display:"flex", alignItems:"center", gap:14, width:"calc(100% - 32px)", margin:"10px 16px 0", padding:"16px 18px", background:"#0a0a0a", border:"1px solid #222", borderLeft:"3px solid #cc44ff", color:"#cc44ff", fontFamily:GTA, fontSize:20, letterSpacing:3, cursor:"pointer" }}
                       onClick={() => { playSound("confirm"); pagarEmprestimo(m.id); }}>
@@ -1132,17 +1141,21 @@
                       <div key={n} style={{...S.stockCard, borderColor:"#111"}}>
                         <div style={{fontSize:28, lineHeight:1}}>{disp.emoji}</div>
                         <div style={{fontFamily:GTA, fontSize:13, color:"#aaa", letterSpacing:2, marginTop:2}}>{disp.label}</div>
-                        <div style={{...S.stockCardQty, color:"#f5c800"}}>{p.stock}</div>
-                        <div style={S.stockCardSub}>{p.tipo==="FIXO"&&p.preco!=null ? `${p.preco}€/UNID` : "PREÇO VARIÁVEL"}</div>
+                        <div style={{...S.stockCardQty, color:"#f5c800"}}>{p.semStock ? "∞" : p.stock}</div>
+                        <div style={S.stockCardSub}>{p.semStock ? "SEM STOCK" : (p.tipo==="FIXO"&&p.preco!=null ? `${p.preco}€/UNID` : "PREÇO VARIÁVEL")}</div>
                         <div style={S.stockCardActions}>
-                          {p.tipo==="FIXO" ? <>
+                          {p.semStock ? (
+                            <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:1, paddingTop:4}}>DÍVIDA MANUAL</div>
+                          ) : p.tipo==="FIXO" ? <>
                             <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>
                             <button style={S.stockBtnOrange} onClick={() => { playSound("select"); setProdutoEdit(n); goto("EDIT_STOCK_VALUE"); }}>EDIT</button>
                           </> : <button style={S.stockBtn} onClick={() => { playSound("select"); setProdutoStock(n); goto("ADD_STOCK_Q"); }}>+ADD</button>}
-                          <button style={{...S.stockBtn, borderColor:"#330000", color:"#aa2200", flex:"0 0 auto", padding:"7px 10px"}}
-                            onClick={() => ask({ message:`APAGAR ${n}?`, sub:"Remove o produto permanentemente.", confirmLabel:"APAGAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarProduto(n) })}>
-                            🗑
-                          </button>
+                          {!p.semStock && (
+                            <button style={{...S.stockBtn, borderColor:"#330000", color:"#aa2200", flex:"0 0 auto", padding:"7px 10px"}}
+                              onClick={() => ask({ message:`APAGAR ${n}?`, sub:"Remove o produto permanentemente.", confirmLabel:"APAGAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => eliminarProduto(n) })}>
+                              🗑
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1169,31 +1182,184 @@
               )}
 
               {/* MOVIMENTOS */}
-              {screen==="MOVIMENTOS" && <>
-                {db.movimentos.length===0 && <div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM MOVIMENTOS</div>}
-                {db.movimentos.map(m => {
-                  const cor = MOV_COLOR[m.tipo] ?? "#f5c800";
-                  let detalhe = "";
-                  if(m.tipo==="VENDA")               detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`;
-                  if(m.tipo==="PAGAMENTO")            detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
-                  if(m.tipo==="ADD_STOCK")            detalhe=`${m.produto}  ·  +${m.unidades} unid`;
-                  if(m.tipo==="OVERRIDE_STOCK")       detalhe=`${m.produto}  ·  ${m.antes} → ${m.depois} unid`;
-                  if(m.tipo==="RESET_STOCK")          detalhe=`stock total resetado`;
-                  if(m.tipo==="EMPRESTIMO")           detalhe=`${m.cliente}  ·  ${m.valor}€  ·  ${m.descricao||'—'}`;
-                  if(m.tipo==="PAGAMENTO_EMPRESTIMO") detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
-                  return (
-                    <div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
-                      <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{MOV_ICON[m.tipo]}  {m.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
-                      <div style={S.movBody}>{detalhe}</div>
-                      {m.tipo==="VENDA" && <div style={S.movFooter}><button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.cliente}  ·  ${m.produto}  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => undoVenda(m) })}>↩ UNDO</button></div>}
+              {screen==="MOVIMENTOS" && (() => {
+                const [cat, setCat]   = React.useState("TUDO");
+                const [tempo, setTempo] = React.useState("TUDO");
+                const [prodFiltro, setProdFiltro] = React.useState("TUDO");
+
+                const agora = Date.now();
+                const umMes = 30 * 24 * 60 * 60 * 1000;
+                const umAno = 365 * 24 * 60 * 60 * 1000;
+
+                // Categorias disponíveis
+                const CATS = [
+                  { id:"TUDO",       label:"TUDO" },
+                  { id:"PAGAMENTOS", label:"PAGAMENTOS" },
+                  { id:"VENDAS",     label:"VENDAS" },
+                  { id:"EMPRESTIMOS",label:"EMPRÉSTIMOS" },
+                  { id:"STOCK",      label:"STOCK" },
+                  { id:"ANULADOS",   label:"ANULADOS" },
+                ];
+
+                // Produtos únicos para filtro de vendas
+                const produtosVendidos = [...new Set(db.movimentos.filter(m=>m.tipo==="VENDA").map(m=>m.produto))];
+
+                // Filtrar movimentos base
+                let base = cat === "ANULADOS"
+                  ? (db.anulados || [])
+                  : db.movimentos.filter(m => {
+                    if (cat === "PAGAMENTOS")  return m.tipo==="PAGAMENTO" || m.tipo==="PAGAMENTO_EMPRESTIMO";
+                    if (cat === "VENDAS")      return m.tipo==="VENDA";
+                    if (cat === "EMPRESTIMOS") return m.tipo==="EMPRESTIMO" || m.tipo==="PAGAMENTO_EMPRESTIMO";
+                    if (cat === "STOCK")       return m.tipo==="ADD_STOCK" || m.tipo==="OVERRIDE_STOCK" || m.tipo==="RESET_STOCK";
+                    return true;
+                  });
+
+                // Filtro de produto (só para VENDAS)
+                if (cat === "VENDAS" && prodFiltro !== "TUDO") {
+                  base = base.filter(m => m.produto === prodFiltro);
+                }
+
+                // Filtro de tempo
+                if (tempo === "MES")  base = base.filter(m => (agora - m.ts) <= umMes);
+                if (tempo === "ANO")  base = base.filter(m => (agora - m.ts) <= umAno);
+
+                // Total de valor dos itens filtrados
+                const totalFiltro = base.reduce((s,m) => {
+                  if (m.tipo==="VENDA" || m.tipo==="EMPRESTIMO") return s + (m.valor||0);
+                  if (m.tipo==="PAGAMENTO" || m.tipo==="PAGAMENTO_EMPRESTIMO") return s + (m.valor||0);
+                  return s;
+                }, 0);
+
+                // Total por método (só pagamentos)
+                const totalDin = base.filter(m=>m.metodo==="DINHEIRO").reduce((s,m)=>s+(m.valor||0),0);
+                const totalMbw = base.filter(m=>m.metodo==="MBWAY").reduce((s,m)=>s+(m.valor||0),0);
+
+                const btnCat = (id, label) => (
+                  <button key={id} style={{
+                    padding:"7px 12px", fontFamily:GTA, fontSize:12, letterSpacing:2,
+                    background: cat===id ? "#1a1500" : "#0a0a0a",
+                    border: `1px solid ${cat===id ? "#f5c800" : "#222"}`,
+                    color: cat===id ? "#f5c800" : "#555",
+                    cursor:"pointer",
+                  }} onClick={() => { playSound("hover"); setCat(id); setProdFiltro("TUDO"); }}>
+                    {label}
+                  </button>
+                );
+
+                const btnTempo = (id, label) => (
+                  <button key={id} style={{
+                    padding:"6px 10px", fontFamily:GTA, fontSize:11, letterSpacing:1,
+                    background: tempo===id ? "#0d1a00" : "#0a0a0a",
+                    border: `1px solid ${tempo===id ? "#00cc44" : "#222"}`,
+                    color: tempo===id ? "#00cc44" : "#555",
+                    cursor:"pointer",
+                  }} onClick={() => { playSound("hover"); setTempo(id); }}>
+                    {label}
+                  </button>
+                );
+
+                return (
+                  <>
+                    {/* Filtro Categoria */}
+                    <div style={{padding:"12px 16px 6px"}}>
+                      <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:8}}>CATEGORIA</div>
+                      <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
+                        {CATS.map(c => btnCat(c.id, c.label))}
+                      </div>
                     </div>
-                  );
-                })}
-                <button style={{...S.dangerBtn,marginTop:20}} onClick={() => { playSound("back"); ask({ message:"LIMPAR HISTÓRICO?", sub:"Todos os movimentos serão apagados.", confirmLabel:"LIMPAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => setDb(d => ({...d,movimentos:[]})) }); }}>
-                  <span>🗑 LIMPAR HISTÓRICO</span>
-                </button>
-                <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
-              </>}
+
+                    {/* Sub-filtro produto (só vendas) */}
+                    {cat==="VENDAS" && produtosVendidos.length > 0 && (
+                      <div style={{padding:"6px 16px 6px"}}>
+                        <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:6}}>PRODUTO</div>
+                        <div style={{display:"flex", flexWrap:"wrap", gap:4}}>
+                          {["TUDO", ...produtosVendidos].map(p => (
+                            <button key={p} style={{
+                              padding:"5px 10px", fontFamily:GTA, fontSize:11, letterSpacing:1,
+                              background: prodFiltro===p ? "#1a1500" : "#0a0a0a",
+                              border: `1px solid ${prodFiltro===p ? "#f5c800" : "#222"}`,
+                              color: prodFiltro===p ? "#f5c800" : "#555",
+                              cursor:"pointer",
+                            }} onClick={() => { playSound("hover"); setProdFiltro(p); }}>{p}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filtro Tempo */}
+                    <div style={{padding:"6px 16px 0"}}>
+                      <div style={{fontFamily:GTA, fontSize:10, color:"#333", letterSpacing:3, marginBottom:6}}>PERÍODO</div>
+                      <div style={{display:"flex", gap:6}}>
+                        {btnTempo("MES","ÚLTIMO MÊS")}
+                        {btnTempo("ANO","ÚLTIMO ANO")}
+                        {btnTempo("TUDO","TUDO")}
+                      </div>
+                    </div>
+
+                    {/* Sumário */}
+                    {base.length > 0 && (
+                      <div style={{margin:"10px 16px 0", padding:"10px 14px", background:"#060606", borderLeft:"3px solid #333", display:"flex", gap:20, flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>RESULTADOS</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#fff"}}>{base.length}</div>
+                        </div>
+                        {totalFiltro > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>TOTAL</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalFiltro}€</div>
+                        </div>}
+                        {(cat==="PAGAMENTOS"||cat==="TUDO") && totalDin > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>💵</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalDin}€</div>
+                        </div>}
+                        {(cat==="PAGAMENTOS"||cat==="TUDO") && totalMbw > 0 && <div>
+                          <div style={{fontFamily:GTA, fontSize:10, color:"#444", letterSpacing:2}}>📱</div>
+                          <div style={{fontFamily:GTA, fontSize:18, color:"#f5c800"}}>{totalMbw}€</div>
+                        </div>}
+                      </div>
+                    )}
+
+                    <div style={{height:1, background:"#111", margin:"10px 0 0"}} />
+
+                    {/* Resultados */}
+                    {base.length===0 && <div style={{padding:"24px 16px",fontFamily:GTA,color:"#333",fontSize:13,letterSpacing:2}}>SEM RESULTADOS</div>}
+                    {base.map(m => {
+                      const tipo = m.tipo || "VENDA_ANULADA";
+                      const cor = tipo==="VENDA_ANULADA" ? "#555" : (MOV_COLOR[tipo] ?? "#f5c800");
+                      let detalhe = "";
+                      if(tipo==="VENDA")               detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valorUnit??'?'}€/u  ·  ${m.valor}€`;
+                      if(tipo==="VENDA_ANULADA")        detalhe=`${m.cliente}  ·  ${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€  ·  ANULADA`;
+                      if(tipo==="PAGAMENTO")            detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                      if(tipo==="ADD_STOCK")            detalhe=`${m.produto}  ·  +${m.unidades} unid`;
+                      if(tipo==="OVERRIDE_STOCK")       detalhe=`${m.produto}  ·  ${m.antes} → ${m.depois} unid`;
+                      if(tipo==="RESET_STOCK")          detalhe=`stock total resetado`;
+                      if(tipo==="EMPRESTIMO")           detalhe=`${m.cliente}  ·  ${m.valor}€  ·  ${m.descricao||'—'}`;
+                      if(tipo==="PAGAMENTO_EMPRESTIMO") detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo ? "  ·  "+m.metodo : ""}`;
+                      const icon = tipo==="VENDA_ANULADA" ? "↩" : (MOV_ICON[tipo] ?? "·");
+                      return (
+                        <div key={m.tsAnulado||m.ts} style={{...S.movCard, borderLeftColor:cor}}>
+                          <div style={S.movHeader}>
+                            <span style={{...S.movTipo, color:cor}}>{icon}  {tipo.replace(/_/g," ")}</span>
+                            <span style={S.movTs}>{fmtTime(m.tsAnulado||m.ts)}</span>
+                          </div>
+                          <div style={S.movBody}>{detalhe}</div>
+                          {tipo==="VENDA" && (
+                            <div style={S.movFooter}>
+                              <button style={S.undoBtn} onClick={() => ask({ message:"ANULAR VENDA?", sub:`${m.cliente}  ·  ${m.produto}  ·  ${m.valor}€`, confirmLabel:"ANULAR", cancelLabel:"MANTER", danger:true, onConfirm:() => undoVenda(m) })}>↩ UNDO</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {cat !== "ANULADOS" && <button style={{...S.dangerBtn,marginTop:20}} onClick={() => { playSound("back"); ask({ message:"LIMPAR HISTÓRICO?", sub:"Todos os movimentos serão apagados.", confirmLabel:"LIMPAR", cancelLabel:"CANCELAR", danger:true, onConfirm:() => setDb(d => ({...d,movimentos:[]})) }); }}>
+                      <span>🗑 LIMPAR HISTÓRICO</span>
+                    </button>}
+
+                    <button style={S.backBtn} onClick={() => { playSound("back"); goto("MENU"); }}>← VOLTAR</button>
+                  </>
+                );
+              })()}
 
             </div>
           </div>
