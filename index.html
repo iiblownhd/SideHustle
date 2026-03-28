@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Side Hustle"/>
+  <meta name="theme-color" content="#000000"/>
+  <title>Side Hustle</title>
+  <script>
+    (function(){
+      const c=document.createElement('canvas');c.width=192;c.height=192;
+      const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,192,192);
+      x.fillStyle='#f5c800';x.font='bold 130px Impact,Arial Black,sans-serif';
+      x.textAlign='center';x.textBaseline='middle';x.fillText('$',96,100);
+      const icon=c.toDataURL('image/png');
+      const m={name:'Side Hustle',short_name:'Side Hustle',start_url:window.location.href,display:'standalone',background_color:'#000000',theme_color:'#000000',orientation:'portrait',icons:[{src:icon,sizes:'192x192',type:'image/png'},{src:icon,sizes:'512x512',type:'image/png'}]};
+      const b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+      const u=URL.createObjectURL(b);const l=document.createElement('link');
+      l.rel='manifest';l.href=u;document.head.appendChild(l);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html,body{background:#000;height:100%;overscroll-behavior:none;}
+    body{-webkit-tap-highlight-color:transparent;user-select:none;}
+    #root{min-height:100vh;}
+    button{-webkit-tap-highlight-color:transparent;}
+    button:active{filter:brightness(1.4);transform:scale(0.97);}
+    ::-webkit-scrollbar{width:2px;}
+    ::-webkit-scrollbar-thumb{background:#f5c800;}
+    input::placeholder{color:#222;}
+    input{-webkit-user-select:text;user-select:text;}
+    @keyframes coinFall{0%{transform:translateY(-60px) rotate(0deg);opacity:1;}100%{transform:translateY(110vh) rotate(720deg);opacity:0;}}
+    @keyframes stackIn{0%{opacity:0;transform:scale(0.5);}60%{opacity:1;transform:scale(1.1);}100%{opacity:1;transform:scale(1);}}
+    @keyframes stackOut{0%{opacity:1;}100%{opacity:0;transform:scale(0.8);}}
+    @keyframes mbRemind{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-6px);}40%,80%{transform:translateX(6px);}}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const KEY = "sidehustle_v46";
+
+
+const sampleDB = {
+  clientes:{}, produtos:{"+++":{stock:0,preco:undefined,tipo:"VOLATIL",semStock:true}},
+  movimentos:[], anulados:[],
+  cofre:{montante:0,historico:[]}
+};
+
+const GTA  = "'Bebas Neue','Impact','Arial Black',sans-serif";
+const MONO = "'Courier New',monospace";
+
+/* ======= SOUND ENGINE ======= */
+let _ac=null,_muted=false;
+const ac=()=>{ if(!_ac)_ac=new(window.AudioContext||window.webkitAudioContext)(); return _ac; };
+
+const tone=(freq,type,gain,dur,start=0)=>{
+  try{
+    const c=ac(),g=c.createGain(),o=c.createOscillator();
+    o.type=type;o.frequency.value=freq;
+    g.gain.setValueAtTime(gain,c.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+start+dur);
+    o.connect(g);g.connect(c.destination);
+    o.start(c.currentTime+start);o.stop(c.currentTime+start+dur);
+  }catch(_){}
+};
+
+const playSound=(type)=>{
+  if(_muted)return;
+  try{
+    if(type==="hover"){   tone(1100,"square",0.06,0.06); }
+    else if(type==="select"){ tone(800,"square",0.08,0.07); tone(1100,"square",0.08,0.07,0.07); }
+    else if(type==="back"){  tone(900,"square",0.07,0.04); tone(500,"square",0.07,0.07,0.04); }
+    else if(type==="confirm"){tone(700,"square",0.07,0.08);tone(900,"square",0.07,0.08,0.08);tone(1200,"square",0.07,0.1,0.16);}
+    else if(type==="chaching"){
+      // cash register chaching
+      [0,0.05,0.1,0.15,0.2,0.25].forEach((t,i)=>{
+        const freqs=[1200,1400,1600,1800,1400,1000];
+        tone(freqs[i],"square",0.12,0.08,t);
+      });
+      setTimeout(()=>{tone(900,"sine",0.15,0.4);},350);
+    }
+  }catch(_){}
+};
+
+/* ======= STYLES ======= */
+const S={
+  root:{background:"#000",minHeight:"100vh",color:"#fff",fontFamily:GTA,position:"relative",overflowX:"hidden"},
+  scanlines:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px)",pointerEvents:"none",zIndex:1},
+  page:{position:"relative",zIndex:2,maxWidth:480,margin:"0 auto",paddingBottom:80},
+  header:{background:"#060606",borderBottom:"1px solid #1e1e1e",padding:"0 12px",display:"flex",alignItems:"stretch",justifyContent:"space-between",minHeight:52,position:"relative"},
+  headerAccent:{position:"absolute",bottom:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#f5c800 0%,rgba(245,200,0,0.3) 60%,transparent 100%)"},
+  headerLeft:{display:"flex",flexDirection:"column",justifyContent:"center",gap:1},
+  headerBrand:{fontFamily:GTA,fontSize:10,letterSpacing:5,color:"#f5c800",opacity:0.55,lineHeight:1},
+  headerScreen:{fontFamily:GTA,fontSize:20,letterSpacing:2,color:"#fff",lineHeight:1},
+  headerRight:{display:"flex",alignItems:"center",gap:8},
+  headerMeta:{fontFamily:GTA,fontSize:11,color:"#888",letterSpacing:1,textAlign:"right"},
+  muteBtn:{background:"transparent",border:"1px solid #222",color:"#555",fontSize:13,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:4,flexShrink:0},
+  divider:{height:1,background:"linear-gradient(90deg,rgba(245,200,0,0.12),transparent)",marginBottom:2},
+  menuBtn:{display:"flex",alignItems:"center",justifyContent:"center",width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"#0a0a0a",border:"1px solid #222",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer",gap:10},
+  menuBtnGold:{display:"flex",alignItems:"center",justifyContent:"center",width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"linear-gradient(135deg,#0d0a00,#1a1400)",border:"1px solid #f5c800",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer",gap:10,boxShadow:"0 0 20px rgba(245,200,0,0.08)"},
+  menuBtnPurple:{display:"flex",alignItems:"center",justifyContent:"center",width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"linear-gradient(135deg,#080010,#100018)",border:"1px solid #cc44ff",borderLeft:"3px solid #cc44ff",color:"#cc44ff",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer",gap:10},
+  dangerBtn:{display:"flex",alignItems:"center",justifyContent:"space-between",width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"14px 18px",background:"#080000",border:"1px solid #330000",borderLeft:"3px solid #ff3300",color:"#ff3300",fontFamily:GTA,fontSize:18,letterSpacing:3,cursor:"pointer"},
+  backBtn:{display:"block",width:"calc(100% - 32px)",margin:"16px 16px 0",padding:"12px 18px",background:"transparent",border:"1px solid #1e1e1e",color:"#444",fontFamily:GTA,fontSize:14,letterSpacing:2,cursor:"pointer",textAlign:"left"},
+  confirmBtn:{display:"block",width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"#0d0d00",border:"1px solid #f5c800",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer",textAlign:"center"},
+  clienteRow:{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",borderBottom:"1px solid #111"},
+  clienteNome:{fontFamily:GTA,fontSize:19,letterSpacing:1,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},
+  divida:{fontFamily:GTA,fontSize:16,color:"#ff3300",whiteSpace:"nowrap"},
+  smallBtn:{padding:"7px 11px",background:"#0a0a0a",border:"1px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:12,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap"},
+  smallBtnGreen:{padding:"7px 11px",background:"#000e00",border:"1px solid #00cc44",color:"#00cc44",fontFamily:GTA,fontSize:12,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap"},
+  smallBtnOff:{padding:"7px 11px",background:"#060606",border:"1px solid #1a1a1a",color:"#2a2a2a",fontFamily:GTA,fontSize:12,letterSpacing:1,cursor:"not-allowed",whiteSpace:"nowrap"},
+  produtoRow:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 16px",borderBottom:"1px solid #111",cursor:"pointer"},
+  produtoNome:{fontFamily:GTA,fontSize:22,letterSpacing:2},
+  badge:{fontFamily:GTA,fontSize:12,color:"#f5c800",background:"#0d0d00",border:"1px solid #333",padding:"3px 10px",letterSpacing:1},
+  badgeRed:{fontFamily:GTA,fontSize:12,color:"#ff3300",background:"#0d0000",border:"1px solid #330000",padding:"3px 10px",letterSpacing:1},
+  stockGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,padding:"1px",marginTop:2},
+  stockCard:{background:"#060606",border:"1px solid #111",padding:"14px 12px",display:"flex",flexDirection:"column",gap:5},
+  stockCardNome:{fontFamily:GTA,fontSize:20,letterSpacing:2},
+  stockCardQty:{fontFamily:GTA,fontSize:32,color:"#f5c800",lineHeight:1},
+  stockCardSub:{fontFamily:GTA,fontSize:11,color:"#333",letterSpacing:1},
+  stockCardActions:{display:"flex",gap:4,marginTop:4},
+  stockBtn:{flex:1,padding:"7px 0",background:"#0a0a0a",border:"1px solid #333",color:"#f5c800",fontFamily:GTA,fontSize:12,letterSpacing:1,cursor:"pointer",textAlign:"center"},
+  stockBtnOrange:{flex:1,padding:"7px 0",background:"#0a0a0a",border:"1px solid #2a1a00",color:"#ff8800",fontFamily:GTA,fontSize:12,letterSpacing:1,cursor:"pointer",textAlign:"center"},
+  inputWrap:{padding:"18px 16px 0"},
+  inputLabel:{fontFamily:GTA,fontSize:12,color:"#444",letterSpacing:2,display:"block",marginBottom:8},
+  inputDisplay:{display:"flex",alignItems:"center",width:"100%",padding:"14px 16px",background:"#060606",border:"1px solid #f5c800",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:34,letterSpacing:2,minHeight:64,boxSizing:"border-box"},
+  textInput:{display:"block",width:"100%",padding:"14px 16px",background:"#060606",border:"1px solid #f5c800",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:22,letterSpacing:2,outline:"none",boxSizing:"border-box"},
+  numPad:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,padding:"10px 16px 0"},
+  numKey:{padding:"18px 0",background:"#080808",border:"1px solid #111",color:"#ccc",fontFamily:GTA,fontSize:24,cursor:"pointer",textAlign:"center"},
+  numKeyBlank:{padding:"18px 0",background:"#000",border:"1px solid #000",cursor:"default"},
+  movCard:{margin:"8px 16px 0",padding:"11px 13px",background:"#050505",borderLeft:"3px solid #f5c800"},
+  movHeader:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4},
+  movTipo:{fontFamily:GTA,fontSize:14,letterSpacing:2},
+  movTs:{fontFamily:MONO,fontSize:10,color:"#333"},
+  movBody:{fontFamily:MONO,fontSize:11,color:"#4a4a4a",lineHeight:1.6,marginBottom:6},
+  movFooter:{display:"flex",justifyContent:"space-between",alignItems:"center"},
+  undoBtn:{padding:"4px 12px",background:"transparent",border:"1px solid #2a2a2a",color:"#444",fontFamily:GTA,fontSize:11,letterSpacing:1,cursor:"pointer"},
+  cofreCheck:{fontSize:14,color:"#00cc44"},
+  fichaHero:{padding:"20px 16px 14px",borderBottom:"1px solid #111"},
+  fichaNome:{fontFamily:GTA,fontSize:28,letterSpacing:2,color:"#fff",lineHeight:1},
+  fichaDivida:{fontFamily:GTA,fontSize:20,color:"#ff3300",marginTop:4},
+  fichaZero:{fontFamily:GTA,fontSize:14,color:"#2a2a2a",marginTop:4,letterSpacing:2},
+  fichaActions:{display:"flex",gap:6,marginTop:14,flexWrap:"wrap"},
+  fichaBtn:{flex:1,padding:"10px 0",background:"#0a0a0a",border:"1px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:13,letterSpacing:2,cursor:"pointer",textAlign:"center"},
+  fichaBtnGreen:{flex:1,padding:"10px 0",background:"#000e00",border:"1px solid #00cc44",color:"#00cc44",fontFamily:GTA,fontSize:13,letterSpacing:2,cursor:"pointer",textAlign:"center"},
+  fichaBtnPurple:{flex:1,padding:"10px 0",background:"#0a0010",border:"1px solid #cc44ff",color:"#cc44ff",fontFamily:GTA,fontSize:13,letterSpacing:2,cursor:"pointer",textAlign:"center"},
+  fichaBtnRed:{padding:"10px 16px",background:"transparent",border:"1px solid #330000",color:"#550000",fontFamily:GTA,fontSize:13,letterSpacing:2,cursor:"pointer",textAlign:"center"},
+  fichaSection:{fontFamily:GTA,fontSize:11,color:"#999",letterSpacing:3,padding:"14px 16px 6px"},
+  fichaEmpty:{fontFamily:MONO,fontSize:11,color:"#666",padding:"12px 16px",letterSpacing:1},
+  cofreBox:{margin:"16px",padding:"20px",background:"linear-gradient(135deg,#0a0a00,#141400)",border:"1px solid #f5c800",borderLeft:"4px solid #f5c800"},
+  cofreMontante:{fontFamily:GTA,fontSize:52,color:"#f5c800",lineHeight:1,textShadow:"0 0 30px rgba(245,200,0,0.3)"},
+  cofreLabel:{fontFamily:GTA,fontSize:11,color:"#555",letterSpacing:3,marginBottom:8},
+  statRow:{display:"flex",gap:16,padding:"10px 16px 0",flexWrap:"wrap"},
+  statBox:{background:"#060606",padding:"10px 12px",borderLeft:"2px solid #333",minWidth:80},
+  statLabel:{fontFamily:GTA,fontSize:10,color:"#444",letterSpacing:2,marginBottom:3},
+  statVal:{fontFamily:GTA,fontSize:18,color:"#f5c800"},
+};
+
+/* ======= HELPERS ======= */
+const fmtTime=(ts)=>{
+  const d=new Date(ts);
+  return `${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")} ${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}`;
+};
+const fmtDate=(ts)=>{
+  const d=new Date(ts);
+  return `${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}/${d.getFullYear()}`;
+};
+
+const MOV_COLOR={VENDA:"#f5c800",PAGAMENTO:"#00cc44",ADD_STOCK:"#00aaff",OVERRIDE_STOCK:"#ff8800",RESET_STOCK:"#ff3300",EMPRESTIMO:"#cc44ff",PAGAMENTO_EMPRESTIMO:"#44ffcc"};
+const MOV_ICON={VENDA:"💰",PAGAMENTO:"✅",ADD_STOCK:"📦",OVERRIDE_STOCK:"✏️",RESET_STOCK:"🔴",EMPRESTIMO:"🤝",PAGAMENTO_EMPRESTIMO:"💸"};
+const PROD_DISPLAY={
+  "1X":{emoji:"💊",label:"× 10"},"2X":{emoji:"💊",label:"× 20"},"4X":{emoji:"💊",label:"× 40"},
+  "MEIA":{emoji:"🧦",label:"MEIA"},"PEÇA":{emoji:"🧩",label:"PEÇA"},
+  "1/4":{emoji:"🔹",label:"1/4"},"1/8":{emoji:"🔸",label:"1/8"},"+++":{emoji:"✍️",label:"+++"},
+};
+const EMOJI_SUGESTOES=["💊","🧦","🧩","🔹","🔸","🌿","❄️","🔥","⚡","💎","🍀","🎯","📦","🧪","🌙","💰","🎲","🔑","🍃","💧"];
+
+/* ======= CONFIRM MODAL ======= */
+function ConfirmModal({config,onCancel}){
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.92)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+      <style>{`@keyframes mIn{0%{opacity:0;transform:scale(0.85) translateY(16px)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+      <div style={{width:"100%",maxWidth:360,animation:"mIn 0.22s cubic-bezier(0.22,1,0.36,1) forwards"}}>
+        <div style={{fontFamily:GTA,fontSize:"clamp(18px,5.5vw,24px)",color:"#fff",letterSpacing:2,textAlign:"center",lineHeight:1.3,marginBottom:config.sub?10:28}}>{config.message}</div>
+        {config.sub&&<div style={{fontFamily:MONO,fontSize:12,color:"#555",textAlign:"center",marginBottom:28,lineHeight:1.5}}>{config.sub}</div>}
+        <div style={{display:"flex",gap:10}}>
+          <button style={{flex:1,padding:"18px 0",background:"linear-gradient(135deg,#1a0000,#2a0000)",border:"2px solid #cc0000",color:"#ff3300",fontFamily:GTA,fontSize:18,letterSpacing:3,cursor:"pointer",borderRadius:2}}
+            onClick={()=>{playSound("back");onCancel();}}>
+            {config.cancelLabel||"🚫"}
+          </button>
+          <button style={{flex:1,padding:"18px 0",background:config.danger?"linear-gradient(135deg,#0a0010,#12001e)":"linear-gradient(135deg,#000a00,#001200)",border:`2px solid ${config.danger?"#6600cc":"#00aa00"}`,color:config.danger?"#aa44ff":"#00cc44",fontFamily:GTA,fontSize:18,letterSpacing:3,cursor:"pointer",borderRadius:2}}
+            onClick={()=>{playSound("select");config.onConfirm();onCancel();}}>
+            {config.confirmLabel||"✅"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ======= NUMPAD ======= */
+function NumPadInput({label,onConfirm,onBack,decimals}){
+  const [val,setVal]=useState("");
+  const press=(d)=>{if(d==="."&&(val.includes(".")||!decimals))return;setVal(v=>(v+d).slice(0,8));};
+  const del=()=>setVal(v=>v.slice(0,-1));
+  const confirm=()=>{const n=Number(val);if(n>0)onConfirm(n);};
+  const keys=decimals?["1","2","3","4","5","6","7","8","9",".","0","⌫"]:["1","2","3","4","5","6","7","8","9","","0","⌫"];
+  return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>{label}</span>
+        <div style={S.inputDisplay}>{val?val:<span style={{color:"#1a1a1a"}}>0</span>}</div>
+      </div>
+      <div style={S.numPad}>
+        {keys.map((d,i)=>(
+          <button key={i} style={d===""?S.numKeyBlank:S.numKey}
+            onClick={()=>{if(d==="⌫"){playSound("back");del();}else if(d!==""){playSound("hover");press(d);}}}>
+            {d}
+          </button>
+        ))}
+      </div>
+      <button style={{...S.confirmBtn,opacity:val&&Number(val)>0?1:0.3}} onClick={()=>{playSound("select");confirm();}}>✓ CONFIRMAR</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");onBack();}}>← VOLTAR</button>
+    </>
+  );
+}
+
+/* ======= NOVO CLIENTE ======= */
+function NovoClienteScreen({onConfirm,onBack}){
+  const [nome,setNome]=useState("");
+  return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>NOME DO CLIENTE</span>
+        <input autoFocus style={{...S.textInput,textTransform:"uppercase"}} value={nome}
+          onChange={e=>setNome(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"&&nome.trim()){playSound("select");onConfirm(nome);}}}
+          placeholder="ESCREVE O NOME..."/>
+      </div>
+      <button style={{...S.confirmBtn,opacity:nome.trim()?1:0.3}} onClick={()=>{if(nome.trim()){playSound("select");onConfirm(nome);}}}>✓ CRIAR CLIENTE</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");onBack();}}>← VOLTAR</button>
+    </>
+  );
+}
+
+/* ======= NOVO PRODUTO ======= */
+function NovoProdutoScreen({onConfirm,onBack}){
+  const [step,setStep]=useState("nome");
+  const [nome,setNome]=useState("");
+  const [simbolo,setSimbolo]=useState("");
+  const [tipo,setTipo]=useState(null);
+  const [precoStr,setPrecoStr]=useState("");
+  const confirmarTipo=(t)=>{setTipo(t);if(t==="VOLATIL")onConfirm({nome:nome.trim().toUpperCase(),simbolo,tipo:"VOLATIL",preco:undefined});else setStep("preco");};
+  if(step==="nome")return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>NOME DO PRODUTO</span>
+        <input autoFocus style={{...S.textInput,textTransform:"uppercase"}} value={nome}
+          onChange={e=>setNome(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"&&nome.trim()){playSound("select");setStep("simbolo");}}}
+          placeholder="EX: 3X, FULL, EXTRA..."/>
+      </div>
+      <button style={{...S.confirmBtn,opacity:nome.trim()?1:0.3}} onClick={()=>{if(nome.trim()){playSound("select");setStep("simbolo");}}}>✓ SEGUINTE</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");onBack();}}>← VOLTAR</button>
+    </>
+  );
+  if(step==="simbolo")return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>SÍMBOLO — {nome.trim().toUpperCase()}</span>
+        <div style={{...S.inputDisplay,fontSize:32,letterSpacing:4,minHeight:64}}>{simbolo||<span style={{color:"#222",fontSize:18}}>toca ou escreve</span>}</div>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"12px 16px 0"}}>
+        {EMOJI_SUGESTOES.map(e=>{const sel=simbolo.includes(e);return(
+          <button key={e} style={{padding:"8px 10px",background:sel?"#1a1500":"#0a0a0a",border:`1px solid ${sel?"#f5c800":"#222"}`,fontSize:22,cursor:"pointer",borderRadius:2}}
+            onClick={()=>{playSound("hover");setSimbolo(p=>sel?p.replace(e,""):(p+e).slice(0,6));}}>
+            {e}
+          </button>
+        );})}
+      </div>
+      <div style={{padding:"10px 16px 0"}}>
+        <input style={{...S.textInput,fontSize:18}} value={simbolo} onChange={e=>setSimbolo(e.target.value.slice(0,6))} placeholder="ou escreve texto (máx 6)..."/>
+      </div>
+      <button style={{...S.confirmBtn,marginTop:12,opacity:simbolo.trim()?1:0.3}} onClick={()=>{if(simbolo.trim()){playSound("select");setStep("tipo");}}}>✓ SEGUINTE</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");setStep("nome");}}>← VOLTAR</button>
+    </>
+  );
+  if(step==="tipo")return(
+    <>
+      <div style={{padding:"20px 16px 8px"}}>
+        <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",letterSpacing:2,marginBottom:16}}>TIPO — {simbolo} {nome.trim().toUpperCase()}</div>
+        <div style={{display:"flex",gap:10}}>
+          <button style={{flex:1,padding:"22px 0",background:"#0a0a0a",border:"2px solid #f5c800",borderLeft:"4px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:16,letterSpacing:2,cursor:"pointer"}}
+            onClick={()=>{playSound("select");confirmarTipo("FIXO");}}>
+            <div style={{fontSize:24,marginBottom:6}}>📌</div>FIXO<div style={{fontSize:10,color:"#555",marginTop:4}}>PREÇO E STOCK FIXOS</div>
+          </button>
+          <button style={{flex:1,padding:"22px 0",background:"#0a0a0a",border:"2px solid #00aaff",borderLeft:"4px solid #00aaff",color:"#00aaff",fontFamily:GTA,fontSize:16,letterSpacing:2,cursor:"pointer"}}
+            onClick={()=>{playSound("select");confirmarTipo("VOLATIL");}}>
+            <div style={{fontSize:24,marginBottom:6}}>🌊</div>VOLÁTIL<div style={{fontSize:10,color:"#555",marginTop:4}}>PREÇO NA VENDA</div>
+          </button>
+        </div>
+      </div>
+      <button style={S.backBtn} onClick={()=>{playSound("back");setStep("simbolo");}}>← VOLTAR</button>
+    </>
+  );
+  if(step==="preco")return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>PREÇO / UNID — {simbolo} {nome.trim().toUpperCase()}</span>
+        <input autoFocus style={{...S.textInput,fontSize:28}} type="number" inputMode="decimal" value={precoStr} onChange={e=>setPrecoStr(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"){playSound("select");if(Number(precoStr)>0)onConfirm({nome:nome.trim().toUpperCase(),simbolo,tipo:"FIXO",preco:Number(precoStr)});}}} placeholder="0"/>
+      </div>
+      <button style={{...S.confirmBtn,opacity:Number(precoStr)>0?1:0.3}} onClick={()=>{if(Number(precoStr)>0){playSound("select");onConfirm({nome:nome.trim().toUpperCase(),simbolo,tipo:"FIXO",preco:Number(precoStr)});}}}>✓ CRIAR PRODUTO</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");setStep("tipo");}}>← VOLTAR</button>
+    </>
+  );
+  return null;
+}
+
+/* ======= DESCRICAO INPUT ======= */
+function DescricaoInput({label,onConfirm,onBack}){
+  const [val,setVal]=useState("");
+  return(
+    <>
+      <div style={S.inputWrap}><span style={S.inputLabel}>{label}</span>
+        <input autoFocus style={{...S.textInput,fontSize:18,textTransform:"uppercase"}} value={val}
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"&&val.trim()){playSound("select");onConfirm(val.trim().toUpperCase());}}}
+          placeholder="DESCRIÇÃO (OPCIONAL)..."/>
+      </div>
+      <button style={S.confirmBtn} onClick={()=>{playSound("select");onConfirm(val.trim().toUpperCase()||"—");}}>✓ CONFIRMAR</button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");onBack();}}>← VOLTAR</button>
+    </>
+  );
+}
+
+/* ======= STACKING ANIMATION ======= */
+function StackingAnimation({onDone,isMbway,fast}){
+  const [phase,setPhase]=useState("coins");
+  useEffect(()=>{
+    if(fast){
+      const t=setTimeout(onDone,3000);
+      return()=>clearTimeout(t);
+    }
+    // Cofre: coins → popup at 4s → reminder fades → done at 7s
+    playSound("chaching");
+    const t1=setTimeout(()=>setPhase("popup"),1800);
+    const t2=setTimeout(()=>setPhase("reminder"),5500);
+    const t3=setTimeout(()=>onDone(),7500);
+    return()=>{clearTimeout(t1);clearTimeout(t2);clearTimeout(t3);};
+  },[]);
+  const coins=Array.from({length:fast?10:22},(_,i)=>({
+    left:`${Math.random()*100}%`,
+    delay:`${Math.random()*(fast?0.6:1.2)}s`,
+    dur:`${(fast?0.4:0.8)+Math.random()*(fast?0.4:0.8)}s`,
+    emoji:["💰","💵","💶","💲"][Math.floor(Math.random()*4)],
+    size:16+Math.floor(Math.random()*24),
+  }));
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:300,pointerEvents:"none",overflow:"hidden"}}>
+      {/* coin rain */}
+      {coins.map((c,i)=>(
+        <div key={i} style={{position:"absolute",top:"-60px",left:c.left,fontSize:c.size,animation:`coinFall ${c.dur} ${c.delay} ease-in forwards`}}>
+          {c.emoji}
+        </div>
+      ))}
+      {/* popup KEEP STACKING — full mode only */}
+      {phase==="popup"&&!fast&&(
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12}}>
+          <div style={{fontFamily:GTA,fontSize:"clamp(40px,14vw,72px)",color:"#f5c800",letterSpacing:4,textShadow:"0 0 60px rgba(245,200,0,0.8)",animation:"stackIn 0.4s ease forwards",textAlign:"center",lineHeight:1}}>
+            KEEP<br/>STACKING!
+          </div>
+        </div>
+      )}
+      {/* reminder MBWay — 3s screentime */}
+      {phase==="reminder"&&!fast&&isMbway&&(
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+          <div style={{fontFamily:GTA,fontSize:18,color:"#00aaff",letterSpacing:2,textAlign:"center",padding:"16px 24px",border:"2px solid #00aaff",background:"rgba(0,0,0,0.9)",animation:`mbRemind 0.4s ease both`}}>
+            📱 NÃO TE ESQUEÇAS<br/>DE LEVANTAR O DINHEIRO
+          </div>
+        </div>
+      )}
+      {phase==="reminder"&&!fast&&!isMbway&&(
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontFamily:GTA,fontSize:22,color:"#f5c800",letterSpacing:3,textAlign:"center",opacity:0.6}}>💰</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ======= MOVIMENTOS SCREEN ======= */
+function MovimentosScreen({db,setDb,ask,playSound,undoVenda,goto,prodDisplayExtra}){
+  const [cat,setCat]=useState(null); // null = choose first
+  const [prodFiltro,setProdFiltro]=useState("TUDO");
+  const [dateMode,setDateMode]=useState("TUDO");
+  const [customDate,setCustomDate]=useState({dia:"",mes:"",ano:""});
+
+  const agora=Date.now();
+  const umMes=30*24*60*60*1000;
+  const umAno=365*24*60*60*1000;
+
+  const CATS=[
+    {id:"TUDO",label:"📋 TODOS",icon:"📋"},
+    {id:"PAGAMENTOS",label:"💸 PAGAMENTOS",icon:"💸"},
+    {id:"VENDAS",label:"💰 VENDAS",icon:"💰"},
+    {id:"EMPRESTIMOS",label:"🤝 EMPRÉSTIMOS",icon:"🤝"},
+    {id:"STOCK",label:"📦 STOCK",icon:"📦"},
+    {id:"ANULADOS",label:"↩ ANULADOS",icon:"↩"},
+  ];
+
+  const produtosVendidos=[...new Set(db.movimentos.filter(m=>m.tipo==="VENDA").map(m=>m.produto))];
+
+  const getEmoji=(n)=>{const d=prodDisplayExtra?.[n]||PROD_DISPLAY[n];return d?d.emoji:"📦";};
+
+  // If no category selected, show picker
+  if(cat===null)return(
+    <>
+      <div style={{padding:"16px 16px 8px",fontFamily:GTA,fontSize:11,color:"#555",letterSpacing:3}}>ESCOLHE UMA CATEGORIA</div>
+      {CATS.map(c=>(
+        <button key={c.id} style={{display:"flex",alignItems:"center",gap:14,width:"calc(100% - 32px)",margin:"8px 16px 0",padding:"16px 18px",background:"#0a0a0a",border:"1px solid #222",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:18,letterSpacing:3,cursor:"pointer"}}
+          onClick={()=>{playSound("select");setCat(c.id);}}>
+          <span style={{fontSize:22}}>{c.icon}</span>{c.id==="TUDO"?"TODOS":c.id}
+        </button>
+      ))}
+      <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+    </>
+  );
+
+  let base=cat==="ANULADOS"
+    ?(db.anulados||[])
+    :db.movimentos.filter(m=>{
+      if(cat==="PAGAMENTOS") return m.tipo==="PAGAMENTO"||m.tipo==="PAGAMENTO_EMPRESTIMO";
+      if(cat==="VENDAS")     return m.tipo==="VENDA";
+      if(cat==="EMPRESTIMOS")return m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO";
+      if(cat==="STOCK")      return m.tipo==="ADD_STOCK"||m.tipo==="OVERRIDE_STOCK"||m.tipo==="RESET_STOCK";
+      return true;
+    });
+
+  if(cat==="VENDAS"&&prodFiltro!=="TUDO") base=base.filter(m=>m.produto===prodFiltro);
+  if(dateMode==="MES") base=base.filter(m=>(agora-m.ts)<=umMes);
+  else if(dateMode==="ANO") base=base.filter(m=>(agora-m.ts)<=umAno);
+  else if(dateMode==="CUSTOM"){
+    base=base.filter(m=>{
+      const d=new Date(m.ts);
+      const diaOk=!customDate.dia||d.getDate()===parseInt(customDate.dia);
+      const mesOk=!customDate.mes||d.getMonth()+1===parseInt(customDate.mes);
+      const anoOk=!customDate.ano||d.getFullYear()===parseInt(customDate.ano);
+      return diaOk&&mesOk&&anoOk;
+    });
+  }
+
+  const totalVal=base.reduce((s,m)=>s+(["VENDA","EMPRESTIMO","PAGAMENTO","PAGAMENTO_EMPRESTIMO"].includes(m.tipo)?m.valor||0:0),0);
+  const totalDin=base.filter(m=>m.metodo==="DINHEIRO").reduce((s,m)=>s+(m.valor||0),0);
+  const totalMbw=base.filter(m=>m.metodo==="MBWAY").reduce((s,m)=>s+(m.valor||0),0);
+
+  const catInfo=CATS.find(c=>c.id===cat);
+
+  return(
+    <>
+      {/* Header da categoria + botão trocar */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px 6px",borderBottom:"1px solid #111"}}>
+        <div style={{fontFamily:GTA,fontSize:16,color:"#f5c800",letterSpacing:2}}>{(catInfo&&catInfo.icon)} {cat==="TUDO"?"TODOS":cat}</div>
+        <button style={{padding:"5px 12px",background:"transparent",border:"1px solid #333",color:"#555",fontFamily:GTA,fontSize:11,letterSpacing:1,cursor:"pointer"}}
+          onClick={()=>{playSound("back");setCat(null);setProdFiltro("TUDO");setDateMode("TUDO");}}>
+          TROCAR ›
+        </button>
+      </div>
+
+      {/* Sub-filtro produto (vendas) */}
+      {cat==="VENDAS"&&produtosVendidos.length>0&&(
+        <div style={{padding:"8px 16px 0",display:"flex",flexWrap:"wrap",gap:4}}>
+          {["TUDO",...produtosVendidos].map(p=>(
+            <button key={p} style={{padding:"5px 10px",fontFamily:GTA,fontSize:11,letterSpacing:1,background:prodFiltro===p?"#1a1500":"#0a0a0a",border:`1px solid ${prodFiltro===p?"#f5c800":"#222"}`,color:prodFiltro===p?"#f5c800":"#555",cursor:"pointer"}}
+              onClick={()=>{playSound("hover");setProdFiltro(p);}}>
+              {getEmoji(p)} {p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Período - compact row */}
+      <div style={{padding:"8px 16px 0",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+        <span style={{fontFamily:GTA,fontSize:10,color:"#333",letterSpacing:2}}>DATA:</span>
+        {[["MES","MÊS"],["ANO","ANO"],["TUDO","TUDO"],["CUSTOM","..."]].map(([id,label])=>(
+          <button key={id} style={{padding:"5px 10px",fontFamily:GTA,fontSize:11,letterSpacing:1,background:dateMode===id?"#0d1a00":"#0a0a0a",border:`1px solid ${dateMode===id?"#00cc44":"#222"}`,color:dateMode===id?"#00cc44":"#555",cursor:"pointer"}}
+            onClick={()=>{playSound("hover");setDateMode(id);}}>
+            {label}
+          </button>
+        ))}
+        {dateMode==="CUSTOM"&&(
+          <div style={{display:"flex",gap:4,marginTop:6,width:"100%"}}>
+            {[["dia","DD",2],["mes","MM",2],["ano","AAAA",4]].map(([k,ph,max])=>(
+              <input key={k} type="number" placeholder={ph} inputMode="numeric"
+                style={{flex:1,padding:"8px 6px",background:"#060606",border:"1px solid #333",color:"#f5c800",fontFamily:GTA,fontSize:15,outline:"none",textAlign:"center"}}
+                value={customDate[k]} onChange={e=>setCustomDate(prev=>({...prev,[k]:e.target.value.slice(0,max)}))}/>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Sumário */}
+      {base.length>0&&(
+        <div style={{margin:"8px 16px 0",padding:"8px 12px",background:"#060606",borderLeft:"3px solid #333",display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <div><div style={{fontFamily:GTA,fontSize:9,color:"#444",letterSpacing:2}}>N.º</div><div style={{fontFamily:GTA,fontSize:15,color:"#fff"}}>{base.length}</div></div>
+          {totalVal>0&&<div><div style={{fontFamily:GTA,fontSize:9,color:"#444",letterSpacing:2}}>TOTAL</div><div style={{fontFamily:GTA,fontSize:15,color:"#f5c800"}}>{totalVal}€</div></div>}
+          {totalDin>0&&<div><div style={{fontFamily:GTA,fontSize:9,color:"#444",letterSpacing:2}}>💵</div><div style={{fontFamily:GTA,fontSize:15,color:"#f5c800"}}>{totalDin}€</div></div>}
+          {totalMbw>0&&<div><div style={{fontFamily:GTA,fontSize:9,color:"#444",letterSpacing:2}}>📱</div><div style={{fontFamily:GTA,fontSize:15,color:"#f5c800"}}>{totalMbw}€</div></div>}
+        </div>
+      )}
+
+      <div style={{height:1,background:"#111",margin:"8px 0 0"}}/>
+      {base.length===0&&<div style={{padding:"24px 16px",fontFamily:GTA,color:"#333",fontSize:13,letterSpacing:2}}>SEM RESULTADOS</div>}
+
+      {base.map(m=>{
+        const tipo=m.tipo||"VENDA_ANULADA";
+        const cor=tipo==="VENDA_ANULADA"?"#555":((MOV_COLOR[tipo]||"#f5c800"));
+        let detalhe="";
+        if(tipo==="VENDA")              detalhe=`${m.cliente}  ·  ${getEmoji(m.produto)} ${m.produto}  ·  ${m.unidades}x  ·  ${(m.valorUnit!==undefined&&m.valorUnit!==null?m.valorUnit:'?')}€/u  ·  ${m.valor}€`;
+        if(tipo==="VENDA_ANULADA")       detalhe=`${m.cliente}  ·  ${getEmoji(m.produto)} ${m.produto}  ·  ${m.valor}€  ·  ANULADA`;
+        if(tipo==="PAGAMENTO")           detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`;
+        if(tipo==="ADD_STOCK")           detalhe=`${getEmoji(m.produto)} ${m.produto}  ·  +${m.unidades} unid`;
+        if(tipo==="OVERRIDE_STOCK")      detalhe=`${getEmoji(m.produto)} ${m.produto}  ·  ${m.antes}→${m.depois} unid`;
+        if(tipo==="RESET_STOCK")         detalhe=`stock total resetado`;
+        if(tipo==="EMPRESTIMO")          detalhe=`${m.cliente}  ·  ${m.valor}€  ·  ${m.descricao||'—'}`;
+        if(tipo==="PAGAMENTO_EMPRESTIMO")detalhe=`${m.cliente}  ·  +${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`;
+        const icon=tipo==="VENDA_ANULADA"?"↩":((MOV_ICON[tipo]||"·"));
+        const isCofreAdicionado=m.cofreAdicionado===true;
+        return(
+          <div key={m.tsAnulado||m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+            <div style={S.movHeader}>
+              <span style={{...S.movTipo,color:cor}}>{icon}  {tipo.replace(/_/g," ")}</span>
+              <span style={S.movTs}>{fmtTime(m.tsAnulado||m.ts)}</span>
+            </div>
+            <div style={S.movBody}>{detalhe}</div>
+            {tipo==="VENDA"&&(
+              <div style={S.movFooter}>
+                <button style={S.undoBtn} onClick={()=>ask({message:"ANULAR VENDA?",sub:`${m.cliente}  ·  ${getEmoji(m.produto)} ${m.produto}  ·  ${m.valor}€`,confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>undoVenda(m)})}>↩ UNDO</button>
+                {isCofreAdicionado&&<span style={S.cofreCheck}>🏦 ✓</span>}
+              </div>
+            )}
+            {(tipo==="PAGAMENTO"||tipo==="PAGAMENTO_EMPRESTIMO")&&isCofreAdicionado&&(
+              <div style={S.movFooter}><span style={S.cofreCheck}>🏦 ✓</span></div>
+            )}
+          </div>
+        );
+      })}
+
+      {cat!=="ANULADOS"&&(
+        <button style={{...S.dangerBtn,marginTop:20}} onClick={()=>{playSound("back");ask({message:"LIMPAR HISTÓRICO?",sub:"Todos os movimentos serão apagados.",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:[]}))});}}>
+          <span>🗑 LIMPAR HISTÓRICO</span>
+        </button>
+      )}
+      <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+    </>
+  );
+}
+
+/* ======= COFRE SCREEN ======= */
+function CofreScreen({db,setDb,ask,playSound,goto,showStacking,prodDisplayExtra}){
+  const [longPressTimer,setLongPressTimer]=useState(null);
+  const [editando,setEditando]=useState(false);
+  const [novoMontante,setNovoMontante]=useState("");
+
+  const cofre=db.cofre||{montante:0,historico:[]};
+
+  const startLongPress=()=>{
+    const t=setTimeout(()=>{setEditando(true);playSound("hover");},600);
+    setLongPressTimer(t);
+  };
+  const endLongPress=()=>{if(longPressTimer){clearTimeout(longPressTimer);setLongPressTimer(null);}};
+
+  const confirmarEdicao=()=>{
+    const n=Number(novoMontante);
+    if(isNaN(n)||n<0)return;
+    setDb(d=>({...d,cofre:{...cofre,montante:n,historico:[{id:Date.now(),tipo:"EDICAO",valor:n,valorAntes:cofre.montante,ts:Date.now()},...(cofre.historico||[])]}}));
+    setEditando(false);setNovoMontante("");playSound("select");
+  };
+
+  return(
+    <>
+      {/* Montante */}
+      <div style={S.cofreBox} onTouchStart={startLongPress} onTouchEnd={endLongPress} onMouseDown={startLongPress} onMouseUp={endLongPress}>
+        <div style={S.cofreLabel}>🏦 COFRE PESSOAL — segura para editar</div>
+        <div style={S.cofreMontante}>{cofre.montante}€</div>
+      </div>
+
+      {editando&&(
+        <div style={{margin:"0 16px",padding:"14px",background:"#0a0a00",border:"1px solid #f5c800"}}>
+          <div style={{fontFamily:GTA,fontSize:12,color:"#aaa",letterSpacing:2,marginBottom:8}}>EDITAR MONTANTE</div>
+          <input style={{...S.textInput,fontSize:24}} type="number" inputMode="decimal" value={novoMontante}
+            onChange={e=>setNovoMontante(e.target.value)} autoFocus placeholder={String(cofre.montante)}/>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button style={{...S.confirmBtn,margin:0,flex:1}} onClick={confirmarEdicao}>✓ GUARDAR</button>
+            <button style={{...S.backBtn,margin:0,flex:1}} onClick={()=>{setEditando(false);setNovoMontante("");}}>✗</button>
+          </div>
+        </div>
+      )}
+
+      <button style={S.menuBtnGold} onClick={()=>{playSound("select");goto("COFRE_ADD_FONTE");}}>
+        <span>➕ ADICIONAR AO COFRE</span>
+      </button>
+      <button style={S.menuBtn} onClick={()=>{playSound("select");goto("COFRE_HISTORICO");}}>
+        <span>📋 HISTÓRICO DO COFRE</span>
+      </button>
+      <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+    </>
+  );
+}
+
+/* ======= SPLASH ======= */
+function SplashScreen({onDone}){
+  const [phase,setPhase]=useState("ninja");
+  useEffect(()=>{
+    const t1=setTimeout(()=>{setPhase("title");playSound("confirm");},1500);
+    const t2=setTimeout(onDone,3400);
+    return()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[]);
+  return(
+    <div style={{position:"fixed",inset:0,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100,overflow:"hidden"}}>
+      <style>{`
+        @keyframes ninjaIn{0%{opacity:0;transform:scale(0.3) rotate(-20deg)}60%{opacity:1;transform:scale(1.12) rotate(4deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+        @keyframes titleIn{0%{opacity:0;transform:translateY(16px);letter-spacing:12px}100%{opacity:1;transform:translateY(0);letter-spacing:5px}}
+        @keyframes subIn{0%,40%{opacity:0}100%{opacity:1}}
+        @keyframes loadBar{0%{width:0%}100%{width:100%}}
+        @keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+      `}</style>
+      {phase==="ninja"&&<>
+        <div style={{fontSize:"clamp(110px,38vw,190px)",lineHeight:1,animation:"ninjaIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards",userSelect:"none"}}>🥷</div>
+        <div style={{fontSize:"clamp(44px,14vw,72px)",marginTop:-16,animation:"ninjaIn 0.6s 0.18s cubic-bezier(0.22,1,0.36,1) both",userSelect:"none"}}>🤫</div>
+      </>}
+      {phase==="title"&&<>
+        <div style={{fontFamily:GTA,fontSize:"clamp(48px,14vw,82px)",color:"#f5c800",letterSpacing:5,textAlign:"center",animation:"titleIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards, pulse 2.5s 0.6s ease infinite",lineHeight:1}}>SIDE HUSTLE</div>
+        <div style={{fontFamily:GTA,fontSize:11,color:"#3a3a3a",marginTop:10,animation:"subIn 1s ease forwards",letterSpacing:7}}>GESTÃO DE NEGÓCIO</div>
+        <div style={{width:"50%",height:1,background:"#111",marginTop:40,overflow:"hidden"}}>
+          <div style={{height:"100%",background:"linear-gradient(90deg,#f5c800,#fff8cc)",animation:"loadBar 1.8s linear forwards"}}/>
+        </div>
+      </>}
+    </div>
+  );
+}
+
+/* ======= MAIN APP ======= */
+function App(){
+  const [db,setDb]=useState(()=>{
+    try{const r=localStorage.getItem(KEY);const d=r?JSON.parse(r):sampleDB;
+      if(!d.anulados)d.anulados=[];
+      if(!d.cofre)d.cofre={montante:0,historico:[]};
+      return d;
+    }catch{return sampleDB;}
+  });
+  const [screen,setScreen]=useState("SPLASH");
+  const [muted,setMuted]=useState(false);
+  const [modal,setModal]=useState(null);
+  const [stacking,setStacking]=useState(null); // {isMbway, onDone}
+
+  // Client state
+  const [clienteVenda,setClienteVenda]=useState(null);
+  const [clientePagamento,setClientePagamento]=useState(null);
+  const [fichaCliente,setFichaCliente]=useState(null);
+  // Product/stock state
+  const [produtoVenda,setProdutoVenda]=useState(null);
+  const [produtoStock,setProdutoStock]=useState(null);
+  const [produtoEdit,setProdutoEdit]=useState(null);
+  const [valorVolatil,setValorVolatil]=useState(0);
+  // Payment state
+  const [pagarValorPendente,setPagarValorPendente]=useState(0);
+  // Loan state
+  const [empClienteSel,setEmpClienteSel]=useState(null);
+  const [empValor,setEmpValor]=useState(0);
+  // Cofre state
+  const [cofreFonte,setCofreFonte]=useState(null); // "PAG_VENDA"|"PAG_EMP"|"EXTERNO"
+  const [cofre_movSel,setCofre_movSel]=useState(null); // selected movement to add
+  const [cofre_exValor,setCofre_exValor]=useState(0);
+  const [cofre_fichaId,setCofre_fichaId]=useState(null);
+
+  const [prodDisplayExtra,setProdDisplayExtra]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem("sh_display")||"{}");}catch{return {};}
+  });
+
+  useEffect(()=>{_muted=muted;},[muted]);
+  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(db));}catch{}},[db]);
+  useEffect(()=>{try{localStorage.setItem("sh_display",JSON.stringify(prodDisplayExtra));}catch{}},[prodDisplayExtra]);
+
+  const goto=(s)=>setScreen(s);
+  const ask=(cfg)=>setModal(cfg);
+  const closeModal=()=>setModal(null);
+
+  const cofre=db.cofre||{montante:0,historico:[]};
+
+  // ---- COMPUTED ----
+  const totalDividas=Object.values(db.clientes).reduce((s,c)=>s+(c.divida||0),0);
+  const totalEmprestimos=Object.values(db.clientes).reduce((s,c)=>s+(c.emprestimo||0),0);
+  const banca=totalDividas+totalEmprestimos+cofre.montante;
+
+  const getEmoji=(n)=>{
+    const d=prodDisplayExtra?.[n]||PROD_DISPLAY[n];
+    return d?d.emoji:"📦";
+  };
+
+  // ---- CLIENTES ----
+  const criarCliente=(nome)=>{
+    if(!nome.trim())return;
+    setDb(d=>({...d,clientes:{...d.clientes,[nome.trim().toUpperCase()]:{divida:0,emprestimo:0}}}));
+    goto("CLIENTES");
+  };
+  const pagar=(metodo)=>{
+    if(!clientePagamento||pagarValorPendente<=0)return;
+    const divida=db.clientes[clientePagamento].divida;
+    if(pagarValorPendente>divida)return;
+    setDb(d=>({...d,
+      clientes:{...d.clientes,[clientePagamento]:{...d.clientes[clientePagamento],divida:d.clientes[clientePagamento].divida-pagarValorPendente}},
+      movimentos:[{tipo:"PAGAMENTO",cliente:clientePagamento,valor:pagarValorPendente,metodo,ts:Date.now()},...d.movimentos]
+    }));
+    goto("CLIENTES");
+  };
+  const pagarEmprestimo=(metodo)=>{
+    if(!clientePagamento||pagarValorPendente<=0)return;
+    const emp=db.clientes[clientePagamento].emprestimo||0;
+    if(pagarValorPendente>emp)return;
+    setDb(d=>({...d,
+      clientes:{...d.clientes,[clientePagamento]:{...d.clientes[clientePagamento],emprestimo:d.clientes[clientePagamento].emprestimo-pagarValorPendente}},
+      movimentos:[{tipo:"PAGAMENTO_EMPRESTIMO",cliente:clientePagamento,valor:pagarValorPendente,metodo,ts:Date.now()},...d.movimentos]
+    }));
+    goto("EMPRESTIMOS");
+  };
+  const eliminarCliente=(nome)=>{
+    setDb(d=>{const novos={...d.clientes};delete novos[nome];return{...d,clientes:novos};});
+    goto("CLIENTES");
+  };
+
+  // ---- VENDER ----
+  const escolherProduto=(p)=>{setProdutoVenda(p);goto(db.produtos[p].tipo==="VOLATIL"?"VENDA_PRECO":"VENDA_UNIDADES");};
+  const confirmarPrecoVolatil=(preco)=>{setValorVolatil(preco);goto("VENDA_UNIDADES");};
+  const vender=(u)=>{
+    if(!clienteVenda||!produtoVenda)return;
+    const prod=db.produtos[produtoVenda];
+    const isVolatil=prod.tipo==="VOLATIL";
+    const isSemStock=prod.semStock===true;
+    if(!isSemStock&&prod.stock<u){ask({message:"SEM STOCK",sub:`${produtoVenda} não tem ${u} unidades.`,confirmLabel:"OK",cancelLabel:"OK",onConfirm:()=>{}});return;}
+    const preco=isVolatil?valorVolatil:((prod.preco||0));
+    const valor=preco*u;
+    ask({
+      message:"CONFIRMAR VENDA?",
+      sub:`${clienteVenda}  ·  ${getEmoji(produtoVenda)} ${produtoVenda}  ·  ${u}x  ·  ${valor}€`,
+      confirmLabel:"✅",cancelLabel:"🚫",
+      onConfirm:()=>{
+        setDb(d=>({...d,
+          produtos:isSemStock?d.produtos:{...d.produtos,[produtoVenda]:{...prod,stock:Math.max(0,prod.stock-u)}},
+          clientes:{...d.clientes,[clienteVenda]:{...d.clientes[clienteVenda],divida:(d.clientes[clienteVenda].divida||0)+valor}},
+          movimentos:[{tipo:"VENDA",cliente:clienteVenda,produto:produtoVenda,unidades:u,valor,valorUnit:preco,ts:Date.now()},...d.movimentos]
+        }));
+        goto("CLIENTES");
+      }
+    });
+  };
+  const undoVenda=(mov)=>{
+    setDb(d=>{
+      const prod=d.produtos[mov.produto];
+      const isSemStock=(prod&&prod.semStock)===true;
+      const deletedLog={...mov,tipo:"VENDA_ANULADA",tsAnulado:Date.now()};
+      return{...d,
+        produtos:(prod&&!isSemStock)?{...d.produtos,[mov.produto]:{...prod,stock:prod.stock+mov.unidades}}:d.produtos,
+        clientes:{...d.clientes,[mov.cliente]:{...d.clientes[mov.cliente],divida:Math.max(0,(d.clientes[mov.cliente].divida||0)-mov.valor)}},
+        movimentos:d.movimentos.filter(m=>m.ts!==mov.ts),
+        anulados:[deletedLog,...(d.anulados||[])],
+      };
+    });
+    playSound("back");
+  };
+
+  // ---- EMPRÉSTIMOS ----
+  const registarEmprestimo=(descricao)=>{
+    if(!empClienteSel||empValor<=0)return;
+    setDb(d=>({...d,
+      clientes:{...d.clientes,[empClienteSel]:{...d.clientes[empClienteSel],emprestimo:(d.clientes[empClienteSel].emprestimo||0)+empValor}},
+      movimentos:[{tipo:"EMPRESTIMO",cliente:empClienteSel,valor:empValor,descricao,ts:Date.now()},...d.movimentos]
+    }));
+    goto("EMPRESTIMOS");
+  };
+
+  // ---- STOCK ----
+  const addStock=(u)=>{
+    if(!produtoStock)return;
+    setDb(d=>({...d,produtos:{...d.produtos,[produtoStock]:{...d.produtos[produtoStock],stock:d.produtos[produtoStock].stock+u}},movimentos:[{tipo:"ADD_STOCK",produto:produtoStock,unidades:u,ts:Date.now()},...d.movimentos]}));
+    goto("STOCK");
+  };
+  const overrideStock=(novo)=>{
+    if(!produtoEdit)return;
+    const antes=db.produtos[produtoEdit].stock;
+    setDb(d=>({...d,produtos:{...d.produtos,[produtoEdit]:{...d.produtos[produtoEdit],stock:novo}},movimentos:[{tipo:"OVERRIDE_STOCK",produto:produtoEdit,antes,depois:novo,ts:Date.now()},...d.movimentos]}));
+    goto("STOCK");
+  };
+  const resetStock=()=>{
+    setDb(d=>{const novos={};Object.entries(d.produtos).forEach(([k,v])=>{novos[k]={...v,stock:0};});return{...d,produtos:novos,movimentos:[{tipo:"RESET_STOCK",ts:Date.now()},...d.movimentos]};});
+  };
+  const criarProduto=({nome,simbolo,tipo,preco})=>{
+    if(!nome||db.produtos[nome])return;
+    setDb(d=>({...d,produtos:{...d.produtos,[nome]:{stock:0,preco,tipo}}}));
+    setProdDisplayExtra(prev=>({...prev,[nome]:{emoji:simbolo,label:nome}}));
+    goto("STOCK");
+  };
+  const eliminarProduto=(nome)=>{
+    setDb(d=>{const p={...d.produtos};delete p[nome];return{...d,produtos:p};});
+    setProdDisplayExtra(prev=>{const n={...prev};delete n[nome];return n;});
+  };
+
+  // ---- COFRE ----
+  const adicionarAoCofre=(mov,fonte,fromCofre=false)=>{
+    const valor=mov.valor;
+    const isMbway=mov.metodo==="MBWAY";
+    const entry={id:Date.now(),tipo:fonte==="PAG_EMP"?"PAG_EMP":"PAG_VENDA",valor,cliente:mov.cliente,produto:mov.produto,metodo:mov.metodo,ts:Date.now(),movTs:mov.ts};
+    setDb(d=>({...d,
+      movimentos:d.movimentos.map(m=>m.ts===mov.ts?{...m,cofreAdicionado:true}:m),
+      cofre:{montante:((d.cofre?d.cofre.montante:0)||0)+valor,historico:[entry,...((d.cofre?d.cofre.historico:[])||[])]}
+    }));
+    if(fromCofre){playSound("chaching");}
+    setStacking({isMbway,fast:!fromCofre,onDone:()=>setStacking(null)});
+  };
+  const adicionarExternoAoCofre=(descricao,valor)=>{
+    const entry={id:Date.now(),tipo:"EXTERNO",valor,descricao,ts:Date.now()};
+    setDb(d=>({...d,cofre:{montante:((d.cofre?d.cofre.montante:0)||0)+valor,historico:[entry,...((d.cofre?d.cofre.historico:[])||[])]}}));
+    playSound("chaching");
+    setStacking({isMbway:false,fast:false,onDone:()=>setStacking(null)});
+  };
+
+  // ---- TITLES ----
+  const TITLES={
+    MENU:"MENU",CLIENTES:"CLIENTES",NOVO_CLIENTE:"NOVO CLIENTE",FICHA_CLIENTE:(fichaCliente||"CLIENTE"),
+    PAGAMENTO:"PAGAMENTO",PAGAMENTO_EMP:"RECEBER EMP.",METODO_PAGAMENTO:"MÉTODO",METODO_EMP:"MÉTODO EMP.",
+    VENDA_PRODUTOS:"VENDER",VENDA_PRECO:"VALOR UNIT.",VENDA_UNIDADES:"UNIDADES",
+    STOCK:"STOCK",ADD_STOCK_Q:"ADD STOCK",EDIT_STOCK_VALUE:"EDITAR STOCK",NOVO_PRODUTO:"NOVO PRODUTO",
+    MOVIMENTOS:"HISTÓRICO",EMPRESTIMOS:"EMPRÉSTIMOS",EMPRESTIMO_CLIENTE:"QUEM?",
+    EMPRESTIMO_VALOR:"QUANTIA",EMPRESTIMO_DESCRICAO:"DESCRIÇÃO",
+    COFRE:"COFRE",COFRE_ADD_FONTE:"ADD AO COFRE",COFRE_ADD_PAGS:"ESCOLHER PAG.",
+    COFRE_ADD_EMP:"ESCOLHER EMP.",COFRE_ADD_EX_VALOR:"MONTANTE",COFRE_ADD_EX_DESC:"ORIGEM",COFRE_HISTORICO:"HISTÓRICO COFRE",COFRE_FICHA:"DETALHE",
+  };
+
+  // ---- RENDER META ----
+  const renderMeta=()=>{
+    if(screen==="MENU")return(
+      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}>
+        {totalDividas>0?(<div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontFamily:GTA,fontSize:9,color:"#aaa",letterSpacing:1}}>VENDAS</span><span style={{fontFamily:GTA,fontSize:13,color:"#ff3300"}}>-{totalDividas}€</span></div>):(<div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontFamily:GTA,fontSize:9,color:"#333",letterSpacing:1}}>VENDAS</span><span style={{fontSize:11}}>✅</span></div>)}
+        {totalEmprestimos>0?(<div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontFamily:GTA,fontSize:9,color:"#aaa",letterSpacing:1}}>EMP.</span><span style={{fontFamily:GTA,fontSize:13,color:"#cc44ff"}}>-{totalEmprestimos}€</span></div>):(<div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontFamily:GTA,fontSize:9,color:"#333",letterSpacing:1}}>EMP.</span><span style={{fontSize:11}}>✅</span></div>)}
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontFamily:GTA,fontSize:9,color:"#f5c800",opacity:0.7,letterSpacing:1}}>BANCA</span><span style={{fontFamily:GTA,fontSize:13,color:"#f5c800"}}>{banca}€</span></div>
+      </div>
+    );
+    if(screen==="VENDA_PRODUTOS"&&clienteVenda)return<div style={{...S.headerMeta,color:"#999"}}>{clienteVenda}</div>;
+    if(screen==="VENDA_PRECO"&&produtoVenda)return<div style={{...S.headerMeta,color:"#999"}}>{produtoVenda}</div>;
+    if(screen==="VENDA_UNIDADES"&&produtoVenda)return<div style={{...S.headerMeta,color:"#999"}}>{produtoVenda}  ·  {(db.produtos[produtoVenda]&&db.produtos[produtoVenda].tipo)==="VOLATIL"?valorVolatil:(((db.produtos[produtoVenda]&&db.produtos[produtoVenda].preco)||0))}€</div>;
+    if(screen==="PAGAMENTO"&&clientePagamento)return<div style={{...S.headerMeta,color:"#ff3300"}}>-{((db.clientes[clientePagamento]&&db.clientes[clientePagamento].divida)||0)}€</div>;
+    if(screen==="COFRE")return<div style={{...S.headerMeta,color:"#f5c800"}}>{cofre.montante}€</div>;
+    return null;
+  };
+
+  // ---- RENDER ----
+  return(
+    <>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');*{box-sizing:border-box;margin:0;padding:0;}body{background:#000;}button{-webkit-tap-highlight-color:transparent;}button:active{filter:brightness(1.4);transform:scale(0.97);}::-webkit-scrollbar{width:2px;}::-webkit-scrollbar-thumb{background:#f5c800;}input::placeholder{color:#222;}input{-webkit-user-select:text;user-select:text;}`}</style>
+      {screen==="SPLASH"&&<SplashScreen onDone={()=>goto("MENU")}/>}
+      {modal&&<ConfirmModal config={modal} onCancel={closeModal}/>}
+      {stacking&&<StackingAnimation isMbway={stacking.isMbway} fast={stacking.fast} onDone={stacking.onDone}/>}
+
+      <div style={S.root}>
+        <div style={S.scanlines}/>
+        <div style={S.page}>
+
+          {screen!=="SPLASH"&&<>
+            <div style={S.header}>
+              <div style={S.headerLeft}>
+                <span style={S.headerBrand}>SIDE HUSTLE</span>
+                <span style={S.headerScreen}>{(TITLES[screen]||screen)}</span>
+              </div>
+              <div style={S.headerRight}>
+                {renderMeta()}
+                <SaveHeaderBtn db={db} playSound={playSound}/>
+                <button style={{...S.muteBtn,borderColor:muted?"#333":"#1e1e1e",color:muted?"#333":"#555"}} onClick={()=>setMuted(m=>!m)}>
+                  {muted?"🔇":"🔈"}
+                </button>
+              </div>
+              <div style={S.headerAccent}/>
+            </div>
+            <div style={S.divider}/>
+          </>}
+
+          {/* ===== MENU ===== */}
+          {screen==="MENU"&&<>
+            {/* Logo area */}
+            <div style={{textAlign:"center",padding:"22px 16px 16px",borderBottom:"1px solid #0d0d0d"}}>
+              <div style={{fontSize:"clamp(52px,16vw,72px)",lineHeight:1,userSelect:"none"}}>🥷🤫</div>
+              <div style={{fontFamily:GTA,fontSize:"clamp(28px,9vw,42px)",color:"#f5c800",letterSpacing:4,marginTop:6,textShadow:"0 0 20px rgba(245,200,0,0.2)"}}>SIDE HUSTLE</div>
+            </div>
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("CLIENTES");}}>👤 CLIENTES</button>
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("STOCK");}}>📦 STOCK</button>
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("EMPRESTIMOS");}}>🤝 EMPRÉSTIMOS</button>
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("COFRE");}}>🏦 COFRE</button>
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("MOVIMENTOS");}}>📋 MOVIMENTOS</button>
+            <div style={{height:1,background:"#111",margin:"18px 16px 0"}}/>
+            <LoadButton db={db} setDb={setDb} playSound={playSound}/>
+          </>}
+
+          {/* ===== CLIENTES ===== */}
+          {screen==="CLIENTES"&&<>
+            {Object.keys(db.clientes).length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>NENHUM CLIENTE</div>}
+            {Object.entries(db.clientes).map(([nome,c])=>{
+              const totalDevido=(c.divida||0)+(c.emprestimo||0);
+              return(<div key={nome} style={S.clienteRow}>
+                <span style={{...S.clienteNome,cursor:"pointer"}} onClick={()=>{playSound("select");setFichaCliente(nome);goto("FICHA_CLIENTE");}}>{nome}</span>
+                {totalDevido>0&&<span style={S.divida}>-{totalDevido}€</span>}
+                <button style={S.smallBtn} onClick={()=>{playSound("select");setClienteVenda(nome);goto("VENDA_PRODUTOS");}}>VENDER</button>
+                <button style={c.divida>0?S.smallBtnGreen:S.smallBtnOff} disabled={!c.divida}
+                  onClick={()=>{playSound("select");setClientePagamento(nome);goto("PAGAMENTO");}}>PAGAR</button>
+              </div>);
+            })}
+            <button style={S.menuBtn} onClick={()=>{playSound("select");goto("NOVO_CLIENTE");}}>+ NOVO CLIENTE</button>
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+          </>}
+
+          {/* ===== NOVO CLIENTE ===== */}
+          {screen==="NOVO_CLIENTE"&&<NovoClienteScreen onConfirm={criarCliente} onBack={()=>{playSound("back");goto("CLIENTES");}}/>}
+
+          {/* ===== FICHA CLIENTE ===== */}
+          {screen==="FICHA_CLIENTE"&&fichaCliente&&(()=>{
+            const c=db.clientes[fichaCliente];if(!c){goto("CLIENTES");return null;}
+            const totalDevido=(c.divida||0)+(c.emprestimo||0);
+            const movsVenda=db.movimentos.filter(m=>(m.tipo==="VENDA"||m.tipo==="PAGAMENTO")&&m.cliente===fichaCliente);
+            const movsEmp=db.movimentos.filter(m=>(m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO")&&m.cliente===fichaCliente);
+            const totalGasto=movsVenda.filter(m=>m.tipo==="VENDA").reduce((s,m)=>s+m.valor,0);
+            const totalPago=movsVenda.filter(m=>m.tipo==="PAGAMENTO").reduce((s,m)=>s+m.valor,0)+movsEmp.filter(m=>m.tipo==="PAGAMENTO_EMPRESTIMO").reduce((s,m)=>s+m.valor,0);
+            return(<>
+              <div style={S.fichaHero}>
+                <div style={S.fichaNome}>{fichaCliente}</div>
+                {totalDevido>0?<div style={{...S.fichaDivida,marginTop:6}}>-{totalDevido}€ total</div>:<div style={S.fichaZero}>SEM DÍVIDAS</div>}
+                <div style={{display:"flex",gap:16,marginTop:12,flexWrap:"wrap"}}>
+                  <div><div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>VENDAS</div><div style={{fontFamily:GTA,fontSize:15,color:(c.divida||0)>0?"#ff3300":"#333"}}>{(c.divida||0)>0?`-${c.divida}€`:"✅"}</div></div>
+                  <div><div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>EMP.</div><div style={{fontFamily:GTA,fontSize:15,color:(c.emprestimo||0)>0?"#cc44ff":"#333"}}>{(c.emprestimo||0)>0?`-${c.emprestimo}€`:"✅"}</div></div>
+                  <div><div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>GASTO</div><div style={{fontFamily:GTA,fontSize:15,color:"#f5c800"}}>{totalGasto}€</div></div>
+                  <div><div style={{fontFamily:GTA,fontSize:10,color:"#555",letterSpacing:2}}>PAGO</div><div style={{fontFamily:GTA,fontSize:15,color:"#00cc44"}}>{totalPago}€</div></div>
+                </div>
+                <div style={S.fichaActions}>
+                  <button style={S.fichaBtn} onClick={()=>{playSound("select");setClienteVenda(fichaCliente);goto("VENDA_PRODUTOS");}}>VENDER</button>
+                  <button style={S.fichaBtnPurple} onClick={()=>{playSound("select");setEmpClienteSel(fichaCliente);goto("EMPRESTIMO_VALOR");}}>EMPRESTAR</button>
+                  <button style={c.divida>0?S.fichaBtnGreen:{...S.fichaBtn,borderColor:"#1a1a1a",color:"#333",cursor:"not-allowed"}} disabled={!(c.divida>0)}
+                    onClick={()=>{playSound("select");setClientePagamento(fichaCliente);goto("PAGAMENTO");}}>PAGAR</button>
+                  {(c.emprestimo||0)>0&&<button style={{...S.fichaBtnPurple,borderColor:"#44ffcc",color:"#44ffcc"}}
+                    onClick={()=>{playSound("select");setClientePagamento(fichaCliente);goto("PAGAMENTO_EMP");}}>REC.EMP</button>}
+                  <button style={S.fichaBtnRed} onClick={()=>{
+                    playSound("back");
+                    if(totalDevido>0){ask({message:"LIQUIDA AS DÍVIDAS PRIMEIRO",sub:`${fichaCliente} tem -${totalDevido}€.`,confirmLabel:"OK",cancelLabel:"OK",onConfirm:()=>{}});return;}
+                    ask({message:`ELIMINAR ${fichaCliente}?`,sub:"Não pode ser revertido.",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>{playSound("back");eliminarCliente(fichaCliente);}});
+                  }}>🗑</button>
+                </div>
+              </div>
+              {movsVenda.length>0&&<>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px 6px"}}>
+                  <div style={S.fichaSection}>VENDAS</div>
+                  <button style={{padding:"4px 10px",background:"transparent",border:"1px solid #330000",color:"#550000",fontFamily:GTA,fontSize:11,letterSpacing:1,cursor:"pointer"}}
+                    onClick={()=>ask({message:"APAGAR HISTÓRICO DE VENDAS?",sub:`Todos os movimentos de ${fichaCliente} serão removidos.`,confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:d.movimentos.filter(m=>!((m.tipo==="VENDA"||m.tipo==="PAGAMENTO")&&m.cliente===fichaCliente))}))})}> 
+                    🗑 TUDO
+                  </button>
+                </div>
+                {movsVenda.map(m=>{
+                  const cor=m.tipo==="VENDA"?"#f5c800":"#00cc44";
+                  const detalhe=m.tipo==="VENDA"?`${getEmoji(m.produto)} ${m.produto}  ·  ${m.unidades}x  ·  ${(m.valorUnit!==undefined&&m.valorUnit!==null?m.valorUnit:'?')}€/u  ·  ${m.valor}€`:`+${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`;
+                  return(<div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                    <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="VENDA"?"💰":"✅"}  {m.tipo}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                    <div style={S.movBody}>{detalhe}</div>
+                    {m.tipo==="VENDA"&&<div style={S.movFooter}>
+                      <button style={S.undoBtn} onClick={()=>ask({message:"ANULAR VENDA?",sub:`${getEmoji(m.produto)} ${m.produto}  ·  ${m.unidades}x  ·  ${m.valor}€`,confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>{undoVenda(m);goto("CLIENTES");}})}>↩ UNDO</button>
+                      <button style={{...S.undoBtn,borderColor:"#330000",color:"#550000"}} onClick={()=>ask({message:"APAGAR MOVIMENTO?",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:d.movimentos.filter(x=>x.ts!==m.ts)}))})}>🗑</button>
+                      {m.cofreAdicionado&&<span style={S.cofreCheck}>🏦 ✓</span>}
+                    </div>}
+                    {m.tipo==="PAGAMENTO"&&<div style={S.movFooter}>
+                      {m.cofreAdicionado?<span style={S.cofreCheck}>🏦 ✓</span>:(
+                        <button style={{...S.undoBtn,borderColor:"#f5c800",color:"#f5c800"}} onClick={()=>adicionarAoCofre(m,"PAG_VENDA")}>🏦 ADD COFRE</button>
+                      )}
+                      <button style={{...S.undoBtn,borderColor:"#330000",color:"#550000"}} onClick={()=>ask({message:"APAGAR MOVIMENTO?",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:d.movimentos.filter(x=>x.ts!==m.ts)}))})}>🗑</button>
+                    </div>}
+                  </div>);
+                })}
+              </>}
+              {movsEmp.length>0&&<>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px 6px"}}>
+                  <div style={S.fichaSection}>EMPRÉSTIMOS</div>
+                  <button style={{padding:"4px 10px",background:"transparent",border:"1px solid #330000",color:"#550000",fontFamily:GTA,fontSize:11,letterSpacing:1,cursor:"pointer"}}
+                    onClick={()=>ask({message:"APAGAR HISTÓRICO DE EMPRÉSTIMOS?",sub:`Todos os empréstimos de ${fichaCliente} serão removidos.`,confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:d.movimentos.filter(m=>!((m.tipo==="EMPRESTIMO"||m.tipo==="PAGAMENTO_EMPRESTIMO")&&m.cliente===fichaCliente))}))})}> 
+                    🗑 TUDO
+                  </button>
+                </div>
+                {movsEmp.map(m=>{
+                  const cor=m.tipo==="EMPRESTIMO"?"#cc44ff":"#44ffcc";
+                  const detalhe=m.tipo==="EMPRESTIMO"?`${m.valor}€${m.descricao&&m.descricao!=="—"?"  ·  "+m.descricao:""}`:`+${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`;
+                  return(<div key={m.ts} style={{...S.movCard,borderLeftColor:cor}}>
+                    <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{m.tipo==="EMPRESTIMO"?"🤝":"💸"}  {m.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(m.ts)}</span></div>
+                    <div style={S.movBody}>{detalhe}</div>
+                    <div style={S.movFooter}>
+                      {m.tipo==="PAGAMENTO_EMPRESTIMO"&&(m.cofreAdicionado?<span style={S.cofreCheck}>🏦 ✓</span>:(
+                        <button style={{...S.undoBtn,borderColor:"#cc44ff",color:"#cc44ff"}} onClick={()=>adicionarAoCofre(m,"PAG_EMP")}>🏦 ADD COFRE</button>
+                      ))}
+                      <button style={{...S.undoBtn,borderColor:"#330000",color:"#550000"}} onClick={()=>ask({message:"APAGAR MOVIMENTO?",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>setDb(d=>({...d,movimentos:d.movimentos.filter(x=>x.ts!==m.ts)}))})}>🗑</button>
+                    </div>
+                  </div>);
+                })}
+              </>}
+              {movsVenda.length===0&&movsEmp.length===0&&<div style={S.fichaEmpty}>SEM MOVIMENTOS</div>}
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("CLIENTES");}}>← VOLTAR</button>
+            </>);
+          })()}
+
+          {/* ===== PAGAMENTO ===== */}
+          {screen==="PAGAMENTO"&&clientePagamento&&(
+            <NumPadInput decimals label={`${clientePagamento} · DÍVIDA VENDAS: ${db.clientes[clientePagamento].divida||0}€`}
+              onConfirm={(v)=>{if(v>(db.clientes[clientePagamento].divida||0))return;setPagarValorPendente(v);goto("METODO_PAGAMENTO");}}
+              onBack={()=>goto("CLIENTES")}/>
+          )}
+          {screen==="METODO_PAGAMENTO"&&clientePagamento&&<>
+            <div style={{padding:"16px 16px 6px",fontFamily:GTA,fontSize:12,color:"#aaa",letterSpacing:2}}>{clientePagamento}  ·  {pagarValorPendente}€</div>
+            <div style={{padding:"4px 16px 0",fontFamily:GTA,fontSize:11,color:"#444",letterSpacing:2}}>COMO RECEBESTE?</div>
+            {[{id:"DINHEIRO",icon:"💵",label:"DINHEIRO"},{id:"MBWAY",icon:"📱",label:"MBWAY"}].map(m=>(
+              <button key={m.id} style={{display:"flex",alignItems:"center",gap:14,width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"#0a0a0a",border:"1px solid #222",borderLeft:"3px solid #f5c800",color:"#f5c800",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer"}}
+                onClick={()=>{playSound("select");pagar(m.id);}}>
+                <span style={{fontSize:26}}>{m.icon}</span>{m.label}
+              </button>
+            ))}
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("PAGAMENTO");}}>← VOLTAR</button>
+          </>}
+          {screen==="PAGAMENTO_EMP"&&clientePagamento&&(
+            <NumPadInput decimals label={`${clientePagamento} · EMPRÉSTIMO: ${db.clientes[clientePagamento].emprestimo||0}€`}
+              onConfirm={(v)=>{if(v>(db.clientes[clientePagamento].emprestimo||0))return;setPagarValorPendente(v);goto("METODO_EMP");}}
+              onBack={()=>goto("EMPRESTIMOS")}/>
+          )}
+          {screen==="METODO_EMP"&&clientePagamento&&<>
+            <div style={{padding:"16px 16px 6px",fontFamily:GTA,fontSize:12,color:"#aaa",letterSpacing:2}}>{clientePagamento}  ·  {pagarValorPendente}€</div>
+            <div style={{padding:"4px 16px 0",fontFamily:GTA,fontSize:11,color:"#444",letterSpacing:2}}>COMO RECEBESTE?</div>
+            {[{id:"DINHEIRO",icon:"💵",label:"DINHEIRO"},{id:"MBWAY",icon:"📱",label:"MBWAY"}].map(m=>(
+              <button key={m.id} style={{display:"flex",alignItems:"center",gap:14,width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"16px 18px",background:"#0a0a0a",border:"1px solid #222",borderLeft:"3px solid #cc44ff",color:"#cc44ff",fontFamily:GTA,fontSize:20,letterSpacing:3,cursor:"pointer"}}
+                onClick={()=>{playSound("select");pagarEmprestimo(m.id);}}>
+                <span style={{fontSize:26}}>{m.icon}</span>{m.label}
+              </button>
+            ))}
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("PAGAMENTO_EMP");}}>← VOLTAR</button>
+          </>}
+
+          {/* ===== VENDA ===== */}
+          {screen==="VENDA_PRODUTOS"&&<>
+            {Object.entries(db.produtos).map(([p,prod])=>{
+              const disp=prodDisplayExtra[p]||PROD_DISPLAY[p]||{emoji:"📦",label:p};
+              return(<div key={p} style={S.produtoRow} onClick={()=>{playSound("select");escolherProduto(p);}}>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:26,lineHeight:1}}>{disp.emoji}</span>
+                  <div><div style={S.produtoNome}>{p}</div>
+                    {prod.preco!=null&&<div style={{fontFamily:GTA,fontSize:12,color:"#aaa",marginTop:2}}>{prod.preco}€/UNID</div>}
+                  </div>
+                </div>
+                {prod.tipo==="FIXO"?<span style={prod.stock===0?S.badgeRed:S.badge}>STOCK {prod.stock}</span>:<span style={{...S.badge,borderColor:prod.semStock?"#555":"#f5c800",color:prod.semStock?"#555":"#f5c800"}}>{prod.semStock?"SEM STOCK":"VOLATIL"}</span>}
+              </div>);
+            })}
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("CLIENTES");}}>← VOLTAR</button>
+          </>}
+          {screen==="VENDA_PRECO"&&<NumPadInput decimals label={`VALOR UNITÁRIO — ${produtoVenda}`} onConfirm={confirmarPrecoVolatil} onBack={()=>goto("VENDA_PRODUTOS")}/>}
+          {screen==="VENDA_UNIDADES"&&produtoVenda&&<NumPadInput
+            label={`UNIDADES — ${produtoVenda}  ·  ${(db.produtos[produtoVenda]&&db.produtos[produtoVenda].tipo)==="VOLATIL"?valorVolatil:(((db.produtos[produtoVenda]&&db.produtos[produtoVenda].preco)||0))}€/UNID`}
+            onConfirm={vender} onBack={()=>goto((db.produtos[produtoVenda]&&db.produtos[produtoVenda].tipo)==="VOLATIL"?"VENDA_PRECO":"VENDA_PRODUTOS")}/>}
+
+          {/* ===== EMPRÉSTIMOS ===== */}
+          {screen==="EMPRESTIMOS"&&(()=>{
+            const comEmp=Object.entries(db.clientes).filter(([,c])=>(c.emprestimo||0)>0);
+            const totalEmp=comEmp.reduce((s,[,c])=>s+(c.emprestimo||0),0);
+            return(<>
+              {totalEmp>0?(
+                <div style={{padding:"12px 16px 8px",borderBottom:"1px solid #111",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontFamily:GTA,fontSize:12,color:"#aaa",letterSpacing:2}}>TOTAL EMPRESTADO</span>
+                  <span style={{fontFamily:GTA,fontSize:20,color:"#cc44ff"}}>-{totalEmp}€</span>
+                </div>
+              ):(
+                <div style={{padding:"20px 16px 12px",borderBottom:"1px solid #111",display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:22}}>✅</span><span style={{fontFamily:GTA,fontSize:14,color:"#aaa",letterSpacing:2}}>TUDO LIQUIDADO</span>
+                </div>
+              )}
+              {comEmp.length===0&&<div style={{padding:"20px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM EMPRÉSTIMOS ACTIVOS</div>}
+              {comEmp.map(([nome,c])=>(
+                <div key={nome} style={{...S.clienteRow,borderLeft:"3px solid #cc44ff"}}>
+                  <span style={S.clienteNome}>{nome}</span>
+                  <span style={{...S.divida,color:"#cc44ff"}}>-{c.emprestimo}€</span>
+                  <button style={{...S.smallBtnGreen,borderColor:"#44ffcc",color:"#44ffcc"}}
+                    onClick={()=>{playSound("select");setClientePagamento(nome);goto("PAGAMENTO_EMP");}}>RECEBER</button>
+                </div>
+              ))}
+              <button style={{...S.menuBtnPurple,marginTop:16}} onClick={()=>{playSound("select");goto("EMPRESTIMO_CLIENTE");}}>+ NOVO EMPRÉSTIMO</button>
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+            </>);
+          })()}
+          {screen==="EMPRESTIMO_CLIENTE"&&<>
+            <div style={{padding:"10px 16px 4px",fontFamily:GTA,fontSize:11,color:"#aaa",letterSpacing:2}}>SELECIONAR CLIENTE</div>
+            {Object.keys(db.clientes).length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>CRIA UM CLIENTE PRIMEIRO</div>}
+            {Object.entries(db.clientes).map(([nome,c])=>(
+              <div key={nome} style={S.produtoRow} onClick={()=>{playSound("select");setEmpClienteSel(nome);goto("EMPRESTIMO_VALOR");}}>
+                <span style={S.produtoNome}>{nome}</span>
+                {(c.emprestimo||0)>0&&<span style={{fontFamily:GTA,fontSize:13,color:"#cc44ff"}}>-{c.emprestimo}€</span>}
+              </div>
+            ))}
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("EMPRESTIMOS");}}>← VOLTAR</button>
+          </>}
+          {screen==="EMPRESTIMO_VALOR"&&empClienteSel&&(
+            <NumPadInput decimals label={`QUANTIA EMPRESTADA — ${empClienteSel}`}
+              onConfirm={(v)=>{setEmpValor(v);goto("EMPRESTIMO_DESCRICAO");}} onBack={()=>goto("EMPRESTIMO_CLIENTE")}/>
+          )}
+          {screen==="EMPRESTIMO_DESCRICAO"&&empClienteSel&&(
+            <DescricaoInput label={`DESCRIÇÃO — ${empClienteSel}  ·  ${empValor}€`}
+              onConfirm={(desc)=>ask({message:"CONFIRMAR EMPRÉSTIMO?",sub:`${empClienteSel}  ·  ${empValor}€  ·  ${desc}`,confirmLabel:"✅",cancelLabel:"🚫",onConfirm:()=>registarEmprestimo(desc)})}
+              onBack={()=>goto("EMPRESTIMO_VALOR")}/>
+          )}
+
+          {/* ===== STOCK ===== */}
+          {screen==="STOCK"&&<>
+            {Object.keys(db.produtos).length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM PRODUTOS — ADICIONA O PRIMEIRO</div>}
+            <div style={S.stockGrid}>
+              {Object.entries(db.produtos).map(([n,p])=>{
+                const disp=prodDisplayExtra[n]||PROD_DISPLAY[n]||{emoji:"📦",label:n};
+                return(<div key={n} style={{...S.stockCard,borderColor:"#111"}}>
+                  <div style={{fontSize:28,lineHeight:1}}>{disp.emoji}</div>
+                  <div style={{fontFamily:GTA,fontSize:13,color:"#555",letterSpacing:2,marginTop:2}}>{disp.label}</div>
+                  <div style={{...S.stockCardQty,color:"#f5c800"}}>{p.semStock?"∞":p.stock}</div>
+                  <div style={S.stockCardSub}>{p.semStock?"SEM STOCK":(p.tipo==="FIXO"&&p.preco!=null?`${p.preco}€/UNID`:"PREÇO VARIÁVEL")}</div>
+                  <div style={S.stockCardActions}>
+                    {p.semStock?(<div style={{fontFamily:GTA,fontSize:10,color:"#333",letterSpacing:1,paddingTop:4}}>DÍVIDA MANUAL</div>)
+                    :p.tipo==="FIXO"?<>
+                      <button style={S.stockBtn} onClick={()=>{playSound("select");setProdutoStock(n);goto("ADD_STOCK_Q");}}>+ADD</button>
+                      <button style={S.stockBtnOrange} onClick={()=>{playSound("select");setProdutoEdit(n);goto("EDIT_STOCK_VALUE");}}>EDIT</button>
+                    </>:<button style={S.stockBtn} onClick={()=>{playSound("select");setProdutoStock(n);goto("ADD_STOCK_Q");}}>+ADD</button>}
+                    {!p.semStock&&<button style={{...S.stockBtn,borderColor:"#330000",color:"#aa2200",flex:"0 0 auto",padding:"7px 10px"}}
+                      onClick={()=>ask({message:`APAGAR ${n}?`,sub:"Remove o produto permanentemente.",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:()=>eliminarProduto(n)})}>
+                      🗑
+                    </button>}
+                  </div>
+                </div>);
+              })}
+            </div>
+            <button style={{...S.menuBtn,marginTop:14}} onClick={()=>{playSound("select");goto("NOVO_PRODUTO");}}>+ NOVO PRODUTO</button>
+            <button style={{...S.dangerBtn,marginTop:10}} onClick={()=>{playSound("back");ask({message:"RESET STOCK?",sub:"Todas as quantidades vão a zero.",confirmLabel:"✅",cancelLabel:"🚫",danger:true,onConfirm:resetStock});}}>
+              <span>⚠ RESET STOCK TOTAL</span>
+            </button>
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("MENU");}}>← VOLTAR</button>
+          </>}
+          {screen==="ADD_STOCK_Q"&&<NumPadInput label={`ADD STOCK — ${produtoStock}  (ACTUAL: ${(db.produtos[produtoStock||'']?db.produtos[produtoStock||''].stock:0)})`} onConfirm={addStock} onBack={()=>goto("STOCK")}/>}
+          {screen==="EDIT_STOCK_VALUE"&&<NumPadInput label={`NOVO STOCK — ${produtoEdit}  (ACTUAL: ${(db.produtos[produtoEdit||'']?db.produtos[produtoEdit||''].stock:0)})`} onConfirm={overrideStock} onBack={()=>goto("STOCK")}/>}
+          {screen==="NOVO_PRODUTO"&&<NovoProdutoScreen onConfirm={criarProduto} onBack={()=>goto("STOCK")}/>}
+
+          {/* ===== COFRE ===== */}
+          {screen==="COFRE"&&<CofreScreen db={db} setDb={setDb} ask={ask} playSound={playSound} goto={goto} showStacking={setStacking} prodDisplayExtra={prodDisplayExtra}/>}
+
+          {screen==="COFRE_ADD_FONTE"&&<>
+            <div style={{padding:"14px 16px 8px",fontFamily:GTA,fontSize:11,color:"#aaa",letterSpacing:2}}>ESCOLHER FONTE</div>
+            <button style={{...S.menuBtn,borderColor:"#00cc44",color:"#00cc44"}} onClick={()=>{playSound("select");setCofreFonte("PAG_VENDA");goto("COFRE_ADD_PAGS");}}>💵 PAGAMENTOS DE VENDAS</button>
+            <button style={{...S.menuBtnPurple}} onClick={()=>{playSound("select");setCofreFonte("PAG_EMP");goto("COFRE_ADD_EMP");}}>💸 PAGAMENTOS DE EMP.</button>
+            <button style={{...S.menuBtnGold}} onClick={()=>{playSound("select");setCofreFonte("EXTERNO");goto("COFRE_ADD_EX_VALOR");}}>🌐 EXTERNO</button>
+            <button style={S.backBtn} onClick={()=>{playSound("back");goto("COFRE");}}>← VOLTAR</button>
+          </>}
+
+          {screen==="COFRE_ADD_PAGS"&&(()=>{
+            const pags=db.movimentos.filter(m=>m.tipo==="PAGAMENTO"&&!m.cofreAdicionado);
+            return(<>
+              {pags.length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM PAGAMENTOS POR ADICIONAR</div>}
+              {pags.map(m=>(
+                <div key={m.ts} style={{...S.clienteRow,cursor:"pointer"}} onClick={()=>{
+                  ask({message:"ADICIONAR AO COFRE?",sub:`${m.cliente}  ·  +${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`,confirmLabel:"✅",cancelLabel:"🚫",
+                    onConfirm:()=>{adicionarAoCofre(m,"PAG_VENDA",true);goto("COFRE");}});
+                }}>
+                  <span style={S.clienteNome}>{m.cliente}</span>
+                  <span style={{fontFamily:GTA,fontSize:15,color:"#00cc44"}}>+{m.valor}€</span>
+                  <span style={{fontFamily:GTA,fontSize:12,color:"#555"}}>{m.metodo||""}</span>
+                </div>
+              ))}
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("COFRE_ADD_FONTE");}}>← VOLTAR</button>
+            </>);
+          })()}
+
+          {screen==="COFRE_ADD_EMP"&&(()=>{
+            const pags=db.movimentos.filter(m=>m.tipo==="PAGAMENTO_EMPRESTIMO"&&!m.cofreAdicionado);
+            return(<>
+              {pags.length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM PAGAMENTOS POR ADICIONAR</div>}
+              {pags.map(m=>(
+                <div key={m.ts} style={{...S.clienteRow,cursor:"pointer"}} onClick={()=>{
+                  ask({message:"ADICIONAR AO COFRE?",sub:`${m.cliente}  ·  +${m.valor}€${m.metodo?"  ·  "+m.metodo:""}`,confirmLabel:"✅",cancelLabel:"🚫",
+                    onConfirm:()=>{adicionarAoCofre(m,"PAG_EMP",true);goto("COFRE");}});
+                }}>
+                  <span style={S.clienteNome}>{m.cliente}</span>
+                  <span style={{fontFamily:GTA,fontSize:15,color:"#44ffcc"}}>+{m.valor}€</span>
+                  <span style={{fontFamily:GTA,fontSize:12,color:"#555"}}>{m.metodo||""}</span>
+                </div>
+              ))}
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("COFRE_ADD_FONTE");}}>← VOLTAR</button>
+            </>);
+          })()}
+
+          {screen==="COFRE_ADD_EX_VALOR"&&<NumPadInput decimals label="MONTANTE EXTERNO"
+            onConfirm={(v)=>{setCofre_exValor(v);goto("COFRE_ADD_EX_DESC");}} onBack={()=>goto("COFRE_ADD_FONTE")}/>}
+          {screen==="COFRE_ADD_EX_DESC"&&<DescricaoInput label={`ORIGEM DO MONTANTE — ${cofre_exValor}€`}
+            onConfirm={(desc)=>ask({message:"ADICIONAR AO COFRE?",sub:`+${cofre_exValor}€  ·  ${desc}`,confirmLabel:"✅",cancelLabel:"🚫",
+              onConfirm:()=>{adicionarExternoAoCofre(desc,cofre_exValor);goto("COFRE");}})}
+            onBack={()=>goto("COFRE_ADD_EX_VALOR")}/>}
+
+          {screen==="COFRE_HISTORICO"&&(()=>{
+            const hist=cofre.historico||[];
+            return(<>
+              {hist.length===0&&<div style={{padding:"28px 16px",fontFamily:GTA,color:"#999",fontSize:14,letterSpacing:2}}>SEM MOVIMENTOS</div>}
+              {hist.map(h=>{
+                const cor=h.tipo==="EXTERNO"?"#f5c800":h.tipo==="PAG_EMP"?"#44ffcc":"#00cc44";
+                const icon=h.tipo==="EXTERNO"?"🌐":h.tipo==="PAG_EMP"?"💸":"💵";
+                let detalhe="";
+                if(h.tipo==="PAG_VENDA") detalhe=`${h.cliente}  ·  +${h.valor}€${h.metodo?"  ·  "+h.metodo:""}`;
+                if(h.tipo==="PAG_EMP")   detalhe=`${h.cliente}  ·  +${h.valor}€${h.metodo?"  ·  "+h.metodo:""}`;
+                if(h.tipo==="EXTERNO")   detalhe=`+${h.valor}€  ·  ${h.descricao||'—'}`;
+                if(h.tipo==="EDICAO")    detalhe=`montante editado: ${h.valorAntes}€ → ${h.valor}€`;
+                return(<div key={h.id} style={{...S.movCard,borderLeftColor:cor,cursor:"pointer"}}
+                  onClick={()=>{setCofre_fichaId(h.id);goto("COFRE_FICHA");}}>
+                  <div style={S.movHeader}><span style={{...S.movTipo,color:cor}}>{icon}  {h.tipo.replace(/_/g," ")}</span><span style={S.movTs}>{fmtTime(h.ts)}</span></div>
+                  <div style={S.movBody}>{detalhe}</div>
+                </div>);
+              })}
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("COFRE");}}>← VOLTAR</button>
+            </>);
+          })()}
+
+          {screen==="COFRE_FICHA"&&cofre_fichaId&&(()=>{
+            const h=(cofre.historico||[]).find(x=>x.id===cofre_fichaId);
+            if(!h){goto("COFRE_HISTORICO");return null;}
+            const cor=h.tipo==="EXTERNO"?"#f5c800":h.tipo==="PAG_EMP"?"#44ffcc":"#00cc44";
+            return(<>
+              <div style={{...S.fichaHero,borderLeftColor:cor}}>
+                <div style={{fontFamily:GTA,fontSize:11,color:"#555",letterSpacing:3,marginBottom:8}}>MOVIMENTO DE COFRE</div>
+                <div style={{fontFamily:GTA,fontSize:32,color:"#f5c800"}}>+{h.valor}€</div>
+                <div style={{fontFamily:GTA,fontSize:13,color:"#333",marginTop:4,letterSpacing:2}}>{fmtDate(h.ts)}</div>
+              </div>
+              <div style={S.statRow}>
+                {h.cliente&&<div style={S.statBox}><div style={S.statLabel}>CLIENTE</div><div style={{...S.statVal,fontSize:14}}>{h.cliente}</div></div>}
+                {h.metodo&&<div style={S.statBox}><div style={S.statLabel}>MÉTODO</div><div style={{...S.statVal,fontSize:14}}>{h.metodo==="MBWAY"?"📱 MBWAY":"💵 DINHEIRO"}</div></div>}
+                {h.descricao&&<div style={S.statBox}><div style={S.statLabel}>ORIGEM</div><div style={{...S.statVal,fontSize:13}}>{h.descricao}</div></div>}
+                <div style={S.statBox}><div style={S.statLabel}>TIPO</div><div style={{...S.statVal,fontSize:13,color:cor}}>{h.tipo.replace(/_/g," ")}</div></div>
+              </div>
+              <button style={S.backBtn} onClick={()=>{playSound("back");goto("COFRE_HISTORICO");}}>← VOLTAR</button>
+            </>);
+          })()}
+
+          {/* ===== MOVIMENTOS ===== */}
+          {screen==="MOVIMENTOS"&&<MovimentosScreen db={db} setDb={setDb} ask={ask} playSound={playSound} undoVenda={undoVenda} goto={goto} prodDisplayExtra={prodDisplayExtra}/>}
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ======= SAVE HEADER BUTTON ======= */
+function SaveHeaderBtn({db,playSound}){
+  const [flash,setFlash]=useState(false);
+  const save=()=>{
+    try{
+      const json=JSON.stringify(db,null,2);
+      const blob=new Blob([json],{type:'application/json'});
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');
+      const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
+      a.href=url;a.download=`sidehustle_${stamp}.json`;
+      document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+      playSound("select");setFlash(true);setTimeout(()=>setFlash(false),1600);
+    }catch(e){}
+  };
+  return(
+    <button style={{...S.muteBtn,borderColor:flash?"#00cc44":"#1e1e1e",color:flash?"#00cc44":"#555",fontSize:15,transition:"all 0.3s"}} onClick={save} title="Guardar">
+      {flash?"✓":"💾"}
+    </button>
+  );
+}
+
+/* ======= LOAD BUTTON (menu only) ======= */
+function LoadButton({db,setDb,playSound}){
+  const load=()=>{
+    const input=document.createElement('input');input.type='file';input.accept='.json,application/json';
+    input.onchange=(e)=>{
+      const file=e.target.files[0];if(!file)return;
+      const reader=new FileReader();
+      reader.onload=(ev)=>{try{const p=JSON.parse(ev.target.result);if(p.clientes&&p.produtos&&p.movimentos){if(!p.anulados)p.anulados=[];if(!p.cofre)p.cofre={montante:0,historico:[]};setDb(p);playSound("select");}}catch{}};
+      reader.readAsText(file);
+    };
+    document.body.appendChild(input);input.click();document.body.removeChild(input);
+  };
+  return(
+    <button style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"calc(100% - 32px)",margin:"10px 16px 0",padding:"12px 18px",background:"transparent",border:"1px solid #222",color:"#444",fontFamily:GTA,fontSize:15,letterSpacing:3,cursor:"pointer"}}
+      onClick={load}>
+      📂 CARREGAR DADOS
+    </button>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+if('caches'in window){const U=window.location.href,C='sh-v3';caches.open(C).then(c=>{fetch(U).then(r=>{if(r.ok)c.put(U,r);}).catch(()=>{});});}
+if('serviceWorker'in navigator){const SW=`const C='sh-v3';self.addEventListener('install',e=>{self.skipWaiting();});self.addEventListener('activate',e=>{self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.open(C).then(cache=>cache.match(e.request).then(cached=>{const net=fetch(e.request).then(res=>{if(res&&res.status===200)cache.put(e.request,res.clone());return res;}).catch(()=>cached);return cached||net;})));});`;
+try{const b=new Blob([SW],{type:'text/javascript'});const u=URL.createObjectURL(b);navigator.serviceWorker.register(u).catch(()=>{});}catch(e){}}
+</script>
+</body>
+</html>
